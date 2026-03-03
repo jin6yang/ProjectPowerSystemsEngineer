@@ -55,5 +55,5 @@ Visual Studio 2026 或 Visual Studio Code
 
 ### 许可证
 
-[LICENSE](LICENSE.txt)
+自定义 [LICENSE](LICENSE.txt)
 
