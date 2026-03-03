@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cf33d6efa5ae47f478a3d08f4dd50968, type: 3}
+  m_Name: Data_MicroFusionReactor
+  m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Data.ComponentData
+  componentName: Micro Fusion Reactor
+  category: 0
+  prefab: {fileID: 3339017321302614228, guid: 4b14ac1a2fa792e4e88a76b2973b9bd8, type: 3}
+  ghostPrefab: {fileID: 3293710981447781320, guid: f2c8a035b4af7c1438636226cd559f7c, type: 3}
+  buildCost: 100
+  powerGeneration: 150
+  powerConsumption: 0
+  maxPowerCapacity: 500
+  stabilityModifier: 0
+  requiredStability: 0
+  isWalkable: 0
