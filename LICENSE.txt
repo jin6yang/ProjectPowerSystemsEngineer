@@ -1,0 +1,9 @@
+Copyright (c) 2026 jin6yang (GitHub)
+
+This project is published for academic review and educational purposes only.
+
+Permission is granted to clone, view, compile, and run the source code for personal, non-commercial use.
+
+Modification, redistribution, sublicensing, or commercial use of this project or any part of it is strictly prohibited without explicit written permission from the author.
+
+All rights reserved.
