@@ -254,9 +254,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bc5453218c7b53f479b78be330827267, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectProtocol.Systems.BuilderController
-  selectedComponent: {fileID: 11400000, guid: 44b35273fe7126043987b3eb58dadefd, type: 2}
-  validGhostMaterial: {fileID: 2100000, guid: 83b7715ec14f7684a957fe5442fc0726, type: 2}
-  invalidGhostMaterial: {fileID: 2100000, guid: 650f9da74d338bd499e0993225ad5dc7, type: 2}
+  availableComponents:
+  - {fileID: 11400000, guid: 7fdae34bdc0f8134eb7fe22fa28fc4fd, type: 2}
+  - {fileID: 11400000, guid: 44b35273fe7126043987b3eb58dadefd, type: 2}
+  - {fileID: 11400000, guid: ff102e6ea48dcb645abfb473fc9612c3, type: 2}
+  validGhostMaterial: {fileID: 2100000, guid: 28b66dd374bedd94381e5b11a40bd321, type: 2}
+  invalidGhostMaterial: {fileID: 2100000, guid: 3ac3c7de0954d1b46b6477d52419a4a6, type: 2}
   dragThreshold: 10
 --- !u!1 &832976572
 GameObject:

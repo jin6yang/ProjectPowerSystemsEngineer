@@ -77,4 +77,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f353e218bdea33e4eb132b719fb972fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Components.PowerNode
-  data: {fileID: 11400000, guid: 44b35273fe7126043987b3eb58dadefd, type: 2}
+  data: {fileID: 11400000, guid: 7fdae34bdc0f8134eb7fe22fa28fc4fd, type: 2}

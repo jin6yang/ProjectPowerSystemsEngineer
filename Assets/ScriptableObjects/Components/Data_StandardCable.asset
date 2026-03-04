@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cf33d6efa5ae47f478a3d08f4dd50968, type: 3}
-  m_Name: Data_MicroFusionReactor
+  m_Name: Data_StandardCable
   m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Data.ComponentData
-  componentName: Micro Fusion Reactor
-  category: 0
-  prefab: {fileID: 719726494344472938, guid: e1c68851cf9dcf946ae21eb6601fa6ae, type: 3}
-  ghostPrefab: {fileID: 719726494344472938, guid: daea03392dadc354ebd7b314a0f76929, type: 3}
+  componentName: Standard Power Cable
+  category: 1
+  prefab: {fileID: 7666732654826082241, guid: c45212ea2e79863469ad505fcee6827d, type: 3}
+  ghostPrefab: {fileID: 0}
   buildCost: 100
-  powerGeneration: 150
+  powerGeneration: 0
   powerConsumption: 0
-  maxPowerCapacity: 500
+  maxPowerCapacity: 100
   stabilityModifier: 0
   requiredStability: 0
   isWalkable: 0
-  isPointToPointCable: 0
+  isPointToPointCable: 1

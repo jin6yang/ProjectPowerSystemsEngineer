@@ -1,45 +1,66 @@
 using UnityEngine;
+using System.Collections.Generic;
 using ProjectPowerSystemsEngineer.Data;
 using ProjectPowerSystemsEngineer.Grid;
 
 namespace ProjectPowerSystemsEngineer.Components
 {
-    /// <summary>
-    /// 所有电力网格组件的绝对基类。
-    /// 无论是发电机、电线还是 AI 核心，都必须挂载此脚本（或其子类）。
-    /// </summary>
     public class PowerNode : MonoBehaviour
     {
         [Header("Data Profile")]
-        [Tooltip("此组件的配置数据源")]
         public ComponentData data;
 
-        // --- 运行时状态 (Runtime State) ---
         public Vector2Int GridPosition { get; private set; }
 
-        // 动态电力数值
         public float CurrentPowerInput { get; private set; }
         public float CurrentStability { get; private set; }
+        public bool IsProtectionTripped { get; private set; }
 
-        public bool IsOverloaded { get; private set; }
-        public bool IsOnFire { get; private set; }
+        // 【新增】存储当前节点连接到的所有下游节点（拓扑图的“边”）
+        public List<PowerNode> OutgoingConnections { get; private set; } = new List<PowerNode>();
 
         /// <summary>
-        /// 当 BuilderController 将其放置到网格上时，调用此方法进行初始化
+        /// 常规地面建筑的初始化
         /// </summary>
         public virtual void Initialize(Vector2Int pos)
         {
             GridPosition = pos;
             CurrentPowerInput = 0f;
-            CurrentStability = 100f; // 默认 100% 纯净度
-            IsOverloaded = false;
-
-            Debug.Log($"[PowerNode] {data?.componentName} 已在 {pos} 初始化。");
+            CurrentStability = 10f;
+            IsProtectionTripped = false;
+            OutgoingConnections.Clear();
         }
 
         /// <summary>
-        /// 接收电力输入（由未来的 PowerSimulationSystem 每帧或每次拓扑改变时调用）
+        /// 【新增】电缆专用的初始化逻辑
         /// </summary>
+        public virtual void InitializeAsCable(PowerNode startNode, PowerNode endNode)
+        {
+            // 电线不严格占据独立网格，暂时沿用起点的坐标
+            GridPosition = startNode.GridPosition;
+            CurrentPowerInput = 0f;
+            CurrentStability = 10f;
+            IsProtectionTripped = false;
+            OutgoingConnections.Clear();
+
+            // 建立逻辑关联： 起点建筑 -> 这根电线 -> 终点建筑
+            startNode.OutgoingConnections.Add(this);
+            this.OutgoingConnections.Add(endNode);
+
+            // 如果电线预制体上挂载了 LineRenderer（线段渲染器），则自动设置两端位置
+            LineRenderer lr = GetComponent<LineRenderer>();
+            if (lr != null)
+            {
+                // 抬高一点 Y 轴，防止电线埋在地里
+                Vector3 startPos = startNode.transform.position + Vector3.up * 1f;
+                Vector3 endPos = endNode.transform.position + Vector3.up * 1f;
+                lr.SetPosition(0, startPos);
+                lr.SetPosition(1, endPos);
+            }
+
+            Debug.Log($"[电网建立] 铺设了一条 {data.componentName}：由 {startNode.data.componentName} 连向 {endNode.data.componentName}");
+        }
+
         public virtual void ReceivePower(float power, float stability)
         {
             CurrentPowerInput = power;
@@ -48,58 +69,38 @@ namespace ProjectPowerSystemsEngineer.Components
             CheckOverload();
         }
 
-        /// <summary>
-        /// 过载检测逻辑
-        /// </summary>
         protected virtual void CheckOverload()
         {
             if (data == null) return;
 
-            // GDD 核心逻辑：输入功率 > 承载上限，导致过载爆炸
-            if (CurrentPowerInput > data.maxPowerCapacity && !IsOverloaded)
+            if (CurrentPowerInput > data.maxPowerCapacity && !IsProtectionTripped)
             {
-                TriggerOverload();
+                TriggerProtection();
             }
         }
 
-        protected virtual void TriggerOverload()
+        protected virtual void TriggerProtection()
         {
-            IsOverloaded = true;
-            Debug.LogWarning($"[警告] {data.componentName} 发生过载！输入:{CurrentPowerInput}MW / 上限:{data.maxPowerCapacity}MW");
-
-            // TODO: 播放爆炸特效，修改网格状态为着火，摧毁此 GameObject
+            IsProtectionTripped = true;
+            Debug.LogWarning($"[警报] {data.componentName} 过载！输入:{CurrentPowerInput}MW / 上限:{data.maxPowerCapacity}MW。已触发保护系统，切断输出！");
         }
 
-        // ==========================================
-        // 供外部获取该节点“输出能力”的接口
-        // ==========================================
-
-        /// <summary>
-        /// 获取当前节点的实际输出功率
-        /// </summary>
         public virtual float GetPowerOutput()
         {
-            if (IsOverloaded || IsOnFire) return 0f;
+            if (IsProtectionTripped) return 0f;
 
-            // 如果是发电机，输出等于自身发电量
             if (data.category == ComponentCategory.Generation)
             {
                 return data.powerGeneration;
             }
 
-            // 如果是传输线缆，输出等于 (输入 - 自身消耗)
             return Mathf.Max(0f, CurrentPowerInput - data.powerConsumption);
         }
 
-        /// <summary>
-        /// 获取当前节点输出的电力稳定性
-        /// </summary>
         public virtual float GetStabilityOutput()
         {
-            if (IsOverloaded || IsOnFire) return 0f;
-
-            // 加上自身对稳定性的影响修饰符，并限制在 0-100 之间
-            return Mathf.Clamp(CurrentStability + data.stabilityModifier, 0f, 100f);
+            if (IsProtectionTripped) return 0f;
+            return Mathf.Clamp(CurrentStability + data.stabilityModifier, 0f, 10f);
         }
     }
 }
