@@ -19,47 +19,42 @@ Project : Power Systems Engineer
 
 </div>
 
-## 如何使用
+## Getting Started
 
-> **注意！**当前项目需要手动构建。
+> **Note!** This project requires manual building.
 
-### 开发工具及环境
+### Development Tools & Environment
 
 Unity 6.3
 
-Visual Studio 2026 或 Visual Studio Code
+Visual Studio 2026 or Visual Studio Code
 
-如果使用 Visual Studio 2026 ，需要
-“.NET 桌面开发” 和 “使用Unity的游戏开发” 工作负荷
+If using Visual Studio 2026, the ".NET desktop development" and "Game development with Unity" workloads are required.
 
-如果使用 Visual Studio Code ，需要
-[Unity - Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=VisualStudioToolsForUnity.vstuc)
+If using Visual Studio Code, you will need the [Unity - Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=VisualStudioToolsForUnity.vstuc) extension.
 
-### 构建
+### Build Instructions
 
-1. 使用`git`命令克隆项目，或者直接下载压缩包（选择 Code → Download ZIP）
+1. Clone the project using the `git` command, or download the ZIP archive directly (select Code → Download ZIP).
 
-   ```
-   git clone https://github.com/jin6yang/ProjectPowerSystemsEngineer
+   ```text
+   git clone [https://github.com/jin6yang/ProjectPowerSystemsEngineer](https://github.com/jin6yang/ProjectPowerSystemsEngineer)
    ```
 
-2. 启动 Unity Hub，导航至项目页面，选择“添加”，再选择“从磁盘添加项目”，从弹出的窗口中导航至目录并选择项目文件夹 `ProjectPowerSystemsEngineer`
+2. Launch Unity Hub, navigate to the Projects page, select "Add", then select "Add project from disk". Navigate to the directory in the pop-up window and select the `ProjectPowerSystemsEngineer` project folder.
 
-3. 接下来，如果 Unity Hub 弹出来版本警告，请选择已安装的 Unity 6.3 (6000.3.10f1) 版本并选择对应平台（建议选择当前平台）并继续。
+3. Next, if Unity Hub displays a version warning, please select the installed Unity 6.3 (6000.3.10f1) version, choose the corresponding platform (the current platform is recommended), and continue.
 
-4. 等待 Unity 加载完毕即可使用引擎构建项目。
+4. Wait for Unity to finish loading, and you can then use the engine to build the project.
 
-   如需直接在编辑器中运行，请点击开始按钮。
+   To run it directly in the editor, please click the Play button.
 
-   如需要构建，请选择 File → Build And Run (请确保 Build Profiles 配置正确)
+   If you need to build it, please select File → Build And Run (ensure the Build Profiles are configured correctly).
 
-### 游玩手册
+### Player Manual
 
-#### 操作
+#### N/A
 
+### License
 
-
-### 许可证
-
-自定义 [LICENSE](LICENSE.txt)
-
+Custom [LICENSE](LICENSE.txt)
