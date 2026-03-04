@@ -53,6 +53,12 @@ Visual Studio 2026 或 Visual Studio Code
 
    如需要构建，请选择 File → Build And Run (请确保 Build Profiles 配置正确)
 
+### 游玩手册
+
+#### 操作
+
+
+
 ### 许可证
 
 自定义 [LICENSE](LICENSE.txt)

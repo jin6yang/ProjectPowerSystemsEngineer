@@ -4,6 +4,7 @@ using System.Collections.Generic; // 引入泛型集合
 using ProjectPowerSystemsEngineer.Grid;
 using ProjectPowerSystemsEngineer.Data;
 using ProjectPowerSystemsEngineer.Components;
+using ProjectPowerSystemsEngineer.Simulation; // 【新增】引入电力模拟系统
 
 namespace ProjectPowerSystemsEngineer.Systems
 {
@@ -325,6 +326,9 @@ namespace ProjectPowerSystemsEngineer.Systems
             }
             GridCell cell = GridManager.Instance.GetCell(pos);
             if (cell != null) cell.PlacedObject = newObj;
+
+            // 【新增】每当放下新建筑，自动触发全网电力刷新
+            PowerSimulationSystem.Instance?.RecalculatePowerGrid();
         }
 
         private void CreateCableConnection(PowerNode start, PowerNode end)
@@ -347,6 +351,9 @@ namespace ProjectPowerSystemsEngineer.Systems
                     lr.BakeMesh(mesh, Camera.main, true);
                     mc.sharedMesh = mesh;
                 }
+
+                // 【新增】每当连好一根线，自动触发全网电力刷新
+                PowerSimulationSystem.Instance?.RecalculatePowerGrid();
             }
         }
 
@@ -417,7 +424,8 @@ namespace ProjectPowerSystemsEngineer.Systems
 
             SelectedNode = null;
 
-            // TODO: 调用 PowerSimulationSystem 重新计算全网电力分布
+            // 【修改】每当拆除结束，自动触发全网电力刷新
+            PowerSimulationSystem.Instance?.RecalculatePowerGrid();
         }
     }
 }

@@ -16,7 +16,6 @@ namespace ProjectPowerSystemsEngineer.Components
         public float CurrentStability { get; private set; }
         public bool IsProtectionTripped { get; private set; }
 
-        // 【新增】存储当前节点连接到的所有下游节点（拓扑图的“边”）
         public List<PowerNode> OutgoingConnections { get; private set; } = new List<PowerNode>();
 
         /// <summary>
@@ -83,6 +82,56 @@ namespace ProjectPowerSystemsEngineer.Components
         {
             IsProtectionTripped = true;
             Debug.LogWarning($"[警报] {data.componentName} 过载！输入:{CurrentPowerInput}MW / 上限:{data.maxPowerCapacity}MW。已触发保护系统，切断输出！");
+        }
+
+        // 极其好用的内置 GUI：在模型头顶直接绘制 2D 数据面板
+        private void OnGUI()
+        {
+            if (Camera.main == null || data == null) return;
+
+            // 将 3D 世界坐标转换为 2D 屏幕坐标 (头顶上方1.5米处)
+            Vector3 screenPos = Camera.main.WorldToScreenPoint(transform.position + Vector3.up * 1.5f);
+
+            // 确保物体在摄像机前方才绘制
+            if (screenPos.z > 0)
+            {
+                screenPos.y = Screen.height - screenPos.y; // 翻转 Y 轴适应 GUI 系统
+
+                GUIStyle style = new GUIStyle();
+                style.alignment = TextAnchor.MiddleCenter;
+                style.fontSize = 14;
+                style.fontStyle = FontStyle.Bold;
+
+                Color textColor;
+                string statusText = "";
+
+                if (IsProtectionTripped)
+                {
+                    statusText = "[过载保护]\n";
+                    textColor = new Color(1f, 0.4f, 0.4f); // 柔和的红色
+                }
+                else if (CurrentPowerInput > 0 || (data.category == ComponentCategory.Generation && data.powerGeneration > 0))
+                {
+                    statusText = "[运行中]\n";
+                    textColor = new Color(0.4f, 1f, 0.4f); // 科技感的绿色
+                }
+                else
+                {
+                    statusText = "[离线/无输入]\n";
+                    textColor = new Color(0.7f, 0.7f, 0.7f); // 灰色
+                }
+
+                string displayText = $"{statusText}{data.componentName}\n输入: {CurrentPowerInput} MW\n稳定度: {CurrentStability}";
+
+                // 绘制黑色文字阴影，防止在亮色背景下看不清
+                Rect rect = new Rect(screenPos.x - 100, screenPos.y - 50, 200, 100);
+                style.normal.textColor = Color.black;
+                GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height), displayText, style);
+
+                // 绘制带状态颜色的主文字
+                style.normal.textColor = textColor;
+                GUI.Label(rect, displayText, style);
+            }
         }
 
         public virtual float GetPowerOutput()
