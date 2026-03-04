@@ -1,0 +1,84 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &8553884539595454439
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 4.38052
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.00001
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 3.44591
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: d7355c917ba3a1e44be86f75a92644b4, type: 2}
+    - target: {fileID: 919132149155446097, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      propertyPath: m_Name
+      value: SM_Tile_PowerTransmissionTower_Standard_Cube_01
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: -3957974063751238002}
+  m_SourcePrefab: {fileID: 100100000, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+--- !u!1 &8823934284353489590 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 488c9a4ee2d82c343ae24871afdb4a1a, type: 3}
+  m_PrefabInstance: {fileID: 8553884539595454439}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &-3957974063751238002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8823934284353489590}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f353e218bdea33e4eb132b719fb972fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Components.PowerNode
+  data: {fileID: 11400000, guid: e18b8c8148277014ab748966ebcb9e44, type: 2}
