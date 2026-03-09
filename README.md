@@ -38,7 +38,7 @@ If using Visual Studio Code, you will need the [Unity - Visual Studio Marketplac
 1. Clone the project using the `git` command, or download the ZIP archive directly (select Code → Download ZIP).
 
    ```text
-   git clone [https://github.com/jin6yang/ProjectPowerSystemsEngineer](https://github.com/jin6yang/ProjectPowerSystemsEngineer)
+   git clone https://github.com/jin6yang/ProjectPowerSystemsEngineer
    ```
 
 2. Launch Unity Hub, navigate to the Projects page, select "Add", then select "Add project from disk". Navigate to the directory in the pop-up window and select the `ProjectPowerSystemsEngineer` project folder.
