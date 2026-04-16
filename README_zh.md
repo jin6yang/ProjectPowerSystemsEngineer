@@ -27,13 +27,15 @@ Project : Power Systems Engineer
 
 Unity 6.3
 
-Visual Studio 2026 或 Visual Studio Code
+IDE（推荐使用 Visual Studio 2026）
 
 如果使用 Visual Studio 2026 ，需要
 “.NET 桌面开发” 和 “使用Unity的游戏开发” 工作负荷
 
 如果使用 Visual Studio Code ，需要
 [Unity - Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=VisualStudioToolsForUnity.vstuc)
+
+如果使用 Rider ，可以直接使用，但是推荐更新至最新版本。
 
 ### 构建
 
@@ -45,7 +47,7 @@ Visual Studio 2026 或 Visual Studio Code
 
 2. 启动 Unity Hub，导航至项目页面，选择“添加”，再选择“从磁盘添加项目”，从弹出的窗口中导航至目录并选择项目文件夹 `ProjectPowerSystemsEngineer`
 
-3. 接下来，如果 Unity Hub 弹出来版本警告，请选择已安装的 Unity 6.3 (6000.3.10f1) 版本并选择对应平台（建议选择当前平台）并继续。
+3. 接下来，如果 Unity Hub 弹出来版本警告，请选择已安装的 Unity 6.3 (6000.3.13f1) 版本并选择对应平台（建议选择当前平台）并继续。
 
 4. 等待 Unity 加载完毕即可使用引擎构建项目。
 
@@ -55,7 +57,7 @@ Visual Studio 2026 或 Visual Studio Code
 
 ### 游玩手册
 
-#### 暂无
+暂无
 
 ### 许可证
 

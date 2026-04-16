@@ -27,11 +27,13 @@ Project : Power Systems Engineer
 
 Unity 6.3
 
-Visual Studio 2026 or Visual Studio Code
+IDE (Visual Studio 2026 is recommended)
 
 If using Visual Studio 2026, the ".NET desktop development" and "Game development with Unity" workloads are required.
 
 If using Visual Studio Code, you will need the [Unity - Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=VisualStudioToolsForUnity.vstuc) extension.
+
+If using Rider, it can be used directly, but it is recommended to update to the latest version.
 
 ### Build Instructions
 
@@ -43,7 +45,7 @@ If using Visual Studio Code, you will need the [Unity - Visual Studio Marketplac
 
 2. Launch Unity Hub, navigate to the Projects page, select "Add", then select "Add project from disk". Navigate to the directory in the pop-up window and select the `ProjectPowerSystemsEngineer` project folder.
 
-3. Next, if Unity Hub displays a version warning, please select the installed Unity 6.3 (6000.3.10f1) version, choose the corresponding platform (the current platform is recommended), and continue.
+3. Next, if Unity Hub displays a version warning, please select the installed Unity 6.3 (6000.3.13f1) version, choose the corresponding platform (the current platform is recommended), and continue.
 
 4. Wait for Unity to finish loading, and you can then use the engine to build the project.
 
@@ -53,7 +55,7 @@ If using Visual Studio Code, you will need the [Unity - Visual Studio Marketplac
 
 ### Player Manual
 
-#### N/A
+N/A
 
 ### License
 
