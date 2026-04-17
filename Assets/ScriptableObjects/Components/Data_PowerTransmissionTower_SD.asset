@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cf33d6efa5ae47f478a3d08f4dd50968, type: 3}
   m_Name: Data_PowerTransmissionTower_SD
   m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Data.ComponentData
-  componentName: Unknown Component
+  componentName: Power Transmission Tower_SD
   category: 0
   prefab: {fileID: 8823934284353489590, guid: 6bc8b580b39d4774b9b3a7a6afdb3ec5, type: 3}
   ghostPrefab: {fileID: 8823934284353489590, guid: 57f009b54ce0a0945acceeb6e5c44571, type: 3}
