@@ -1,10 +1,10 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using System.Collections.Generic; // 引入泛型集合
+using System.Collections.Generic;
 using ProjectPowerSystemsEngineer.Grid;
 using ProjectPowerSystemsEngineer.Data;
 using ProjectPowerSystemsEngineer.Components;
-using ProjectPowerSystemsEngineer.Simulation; // 【新增】引入电力模拟系统
+using ProjectPowerSystemsEngineer.Simulation;
 
 namespace ProjectPowerSystemsEngineer.Systems
 {
@@ -17,16 +17,23 @@ namespace ProjectPowerSystemsEngineer.Systems
         public Material validGhostMaterial;
         public Material invalidGhostMaterial;
 
+        [Header("UI & Feedback")]
+        [Tooltip("地块选中时的四角指示器预制体")]
+        public GameObject selectionIndicatorPrefab;
+
         [Header("Interaction Settings")]
         public float dragThreshold = 10f;
 
         // --- 核心交互状态 ---
-        public PowerNode SelectedNode { get; private set; } // 全局当前选中的节点
+        public PowerNode SelectedNode { get; private set; } // 全局当前选中的节点（如果有）
+        public Vector2Int? SelectedGridPosition { get; private set; } // 全局当前选中的地块坐标
+
         private bool isBuildingMode = false;
         private int currentSelectedIndex = 0;
 
         private GameObject ghostInstance;
         private MeshRenderer[] ghostRenderers;
+        private GameObject indicatorInstance; // 指示器的实例
 
         private Vector2 mouseDownPosition;
         private bool isDragging = false;
@@ -41,6 +48,7 @@ namespace ProjectPowerSystemsEngineer.Systems
 
         void Start()
         {
+            // 初始化连线预览
             GameObject lineObj = new GameObject("CablePreviewLine");
             lineObj.transform.SetParent(this.transform);
             previewLine = lineObj.AddComponent<LineRenderer>();
@@ -49,6 +57,13 @@ namespace ProjectPowerSystemsEngineer.Systems
             previewLine.material = validGhostMaterial;
             previewLine.positionCount = 2;
             previewLine.enabled = false;
+
+            // 初始化地块指示器
+            if (selectionIndicatorPrefab != null)
+            {
+                indicatorInstance = Instantiate(selectionIndicatorPrefab, transform);
+                indicatorInstance.SetActive(false); // 默认隐藏
+            }
         }
 
         void Update()
@@ -71,7 +86,6 @@ namespace ProjectPowerSystemsEngineer.Systems
 
         private void HandleKeyboardInput()
         {
-            // 1. Esc 键逻辑 (分层级退出)
             if (Keyboard.current.escapeKey.wasPressedThisFrame)
             {
                 if (isBuildingMode)
@@ -79,14 +93,13 @@ namespace ProjectPowerSystemsEngineer.Systems
                     if (cableStartNode != null) CancelCablePlacement();
                     else ToggleBuildMode();
                 }
-                else if (SelectedNode != null)
+                else if (SelectedGridPosition.HasValue || SelectedNode != null)
                 {
-                    SelectedNode = null;
-                    Debug.Log("[系统] 取消选中目标");
+                    ClearSelection();
+                    Debug.Log("[系统] 取消选中目标/地块");
                 }
             }
 
-            // 2. Delete/Backspace 拆除逻辑 (【核心修改】：仅在 标准模式 且有选中物体时生效)
             if (!isBuildingMode && SelectedNode != null)
             {
                 if (Keyboard.current.deleteKey.wasPressedThisFrame || Keyboard.current.backspaceKey.wasPressedThisFrame)
@@ -95,10 +108,8 @@ namespace ProjectPowerSystemsEngineer.Systems
                 }
             }
 
-            // 3. 建造模式开关 (B键)
             if (Keyboard.current.bKey.wasPressedThisFrame) ToggleBuildMode();
 
-            // 4. 快捷栏切换 (1, 2, 3, 4)
             if (availableComponents == null || availableComponents.Length == 0) return;
             int newIndex = currentSelectedIndex;
             if (Keyboard.current.digit1Key.wasPressedThisFrame) newIndex = 0;
@@ -130,7 +141,6 @@ namespace ProjectPowerSystemsEngineer.Systems
             }
         }
 
-        // ==================== 统一的核心点击处理 ====================
         private void ProcessLeftClick()
         {
             Ray ray = Camera.main.ScreenPointToRay(Mouse.current.position.ReadValue());
@@ -151,37 +161,37 @@ namespace ProjectPowerSystemsEngineer.Systems
                 }
             }
 
-            // 【核心修改】：彻底隔离 标准模式 与 建造模式
             if (!isBuildingMode)
             {
-                // ---- 标准模式：只处理选中逻辑 ----
-                if (clickedNode != null)
+                // ---- 标准模式 ----
+                SelectedNode = clickedNode;
+                SelectedGridPosition = gridPos;
+
+                if (SelectedNode != null)
                 {
-                    SelectedNode = clickedNode;
-                    Debug.Log($"<color=cyan>[交互] 选中设施: {SelectedNode.data.componentName} | 当前输入功率: {SelectedNode.CurrentPowerInput}MW</color>");
+                    Debug.Log($"<color=cyan>[交互] 选中设施: {SelectedNode.data.componentName}</color>");
                 }
-                else
+                else if (SelectedGridPosition.HasValue)
                 {
-                    SelectedNode = null;
-                    Debug.Log("[系统] 取消选中目标");
+                    Debug.Log($"<color=cyan>[交互] 选中空地块: {SelectedGridPosition.Value}</color>");
                 }
+
+                UpdateSelectionIndicator();
             }
             else
             {
-                // ---- 建造模式：只处理放置和连线逻辑，禁用选中 ----
-                SelectedNode = null; // 确保在建造模式中点击不会触发任何选中状态
+                // ---- 建造模式 ----
+                ClearSelection();
 
                 if (SelectedComponent != null)
                 {
                     if (SelectedComponent.isPointToPointCable)
                     {
-                        // 连线模式：只有点在"不是电线"的建筑上才有效
                         if (clickedNode != null && !clickedNode.data.isPointToPointCable)
                         {
                             if (cableStartNode == null)
                             {
                                 cableStartNode = clickedNode;
-                                Debug.Log($"[建造] 起点已选择: {clickedNode.data.componentName}");
                             }
                             else if (cableStartNode != clickedNode)
                             {
@@ -192,7 +202,6 @@ namespace ProjectPowerSystemsEngineer.Systems
                     }
                     else
                     {
-                        // 方块放置模式：必须点在空地上
                         if (gridPos.HasValue && clickedNode == null)
                         {
                             bool canPlace = GridManager.Instance.IsCellAvailable(gridPos.Value);
@@ -204,6 +213,38 @@ namespace ProjectPowerSystemsEngineer.Systems
                         }
                     }
                 }
+            }
+        }
+
+        private void ClearSelection()
+        {
+            SelectedNode = null;
+            SelectedGridPosition = null;
+            UpdateSelectionIndicator();
+        }
+
+        private void UpdateSelectionIndicator()
+        {
+            if (indicatorInstance == null) return;
+
+            // 1. 如果选中了电线（非网格占用的实体），隐藏地块指示器，只依赖UI显示
+            if (SelectedNode != null && SelectedNode.data.isPointToPointCable)
+            {
+                indicatorInstance.SetActive(false);
+                return;
+            }
+
+            // 2. 如果选中了网格（不论是空地还是有建筑），显示地块指示器
+            if (SelectedGridPosition.HasValue)
+            {
+                indicatorInstance.SetActive(true);
+                Vector3 worldPos = GridManager.Instance.GridToWorldPosition(SelectedGridPosition.Value);
+                // 将指示器微微抬高，防止与地面产生 Z-Fighting 穿模
+                indicatorInstance.transform.position = worldPos + Vector3.up * 0.02f;
+            }
+            else
+            {
+                indicatorInstance.SetActive(false);
             }
         }
 
@@ -283,7 +324,7 @@ namespace ProjectPowerSystemsEngineer.Systems
 
             if (isBuildingMode)
             {
-                SelectedNode = null; // 【核心修改】：进入建造模式时，强制清空之前的选中状态
+                ClearSelection(); // 进入建造模式强制清空选中
                 RefreshGhost();
                 Debug.Log($">>> 进入建造模式！(工具:{SelectedComponent.componentName})");
             }
@@ -327,7 +368,6 @@ namespace ProjectPowerSystemsEngineer.Systems
             GridCell cell = GridManager.Instance.GetCell(pos);
             if (cell != null) cell.PlacedObject = newObj;
 
-            // 【新增】每当放下新建筑，自动触发全网电力刷新
             PowerSimulationSystem.Instance?.RecalculatePowerGrid();
         }
 
@@ -352,28 +392,23 @@ namespace ProjectPowerSystemsEngineer.Systems
                     mc.sharedMesh = mesh;
                 }
 
-                // 【新增】每当连好一根线，自动触发全网电力刷新
                 PowerSimulationSystem.Instance?.RecalculatePowerGrid();
             }
         }
 
-        // ==================== 智能级联拆除 ====================
         private void DeleteSelectedNode()
         {
             if (SelectedNode == null) return;
 
             Debug.Log($"<color=red>[系统] 拆除了设施: {SelectedNode.data.componentName}</color>");
 
-            // 收集所有需要被一并销毁的节点（建筑本体 + 依附的电线）
             List<PowerNode> nodesToDestroy = new List<PowerNode>();
             nodesToDestroy.Add(SelectedNode);
 
             PowerNode[] allNodesInScene = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
 
-            // 如果拆除的是一栋实体建筑，我们需要找出连在它身上的电线
             if (!SelectedNode.data.isPointToPointCable)
             {
-                // 1. 寻找以它为【起点】的电线 (它们存在于 SelectedNode 的连线列表中)
                 foreach (var connectedNode in SelectedNode.OutgoingConnections)
                 {
                     if (connectedNode != null && connectedNode.data.isPointToPointCable)
@@ -382,7 +417,6 @@ namespace ProjectPowerSystemsEngineer.Systems
                     }
                 }
 
-                // 2. 寻找以它为【终点】的电线 (遍历全图，看看谁的连线列表里包含了 SelectedNode)
                 foreach (var node in allNodesInScene)
                 {
                     if (node != null && node.data.isPointToPointCable && node.OutgoingConnections.Contains(SelectedNode))
@@ -392,21 +426,17 @@ namespace ProjectPowerSystemsEngineer.Systems
                 }
             }
 
-            // 统一执行清理与销毁
             foreach (var nodeToDestroy in nodesToDestroy)
             {
-                // a. 释放网格占用（仅限实体建筑）
                 if (!nodeToDestroy.data.isPointToPointCable)
                 {
                     GridCell cell = GridManager.Instance.GetCell(nodeToDestroy.GridPosition);
-                    // 确保我们清空的是自己，而不是后来造在同一个格子的别人（双重保险）
                     if (cell != null && cell.PlacedObject == nodeToDestroy.gameObject)
                     {
                         cell.PlacedObject = null;
                     }
                 }
 
-                // b. 清除全图中其他建筑对它的"连接记忆" (打断拓扑关系)
                 foreach (var node in allNodesInScene)
                 {
                     if (node != null && node.OutgoingConnections.Contains(nodeToDestroy))
@@ -415,16 +445,13 @@ namespace ProjectPowerSystemsEngineer.Systems
                     }
                 }
 
-                // c. 物理销毁
                 if (nodeToDestroy != null && nodeToDestroy.gameObject != null)
                 {
                     Destroy(nodeToDestroy.gameObject);
                 }
             }
 
-            SelectedNode = null;
-
-            // 【修改】每当拆除结束，自动触发全网电力刷新
+            ClearSelection(); // 拆除后自动清空选中状态
             PowerSimulationSystem.Instance?.RecalculatePowerGrid();
         }
     }
