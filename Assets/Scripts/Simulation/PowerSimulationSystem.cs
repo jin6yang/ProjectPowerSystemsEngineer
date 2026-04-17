@@ -6,21 +6,9 @@ using ProjectPowerSystemsEngineer.Data;
 
 namespace ProjectPowerSystemsEngineer.Simulation
 {
-    /// <summary>
-    /// 全局电力模拟系统：负责计算电力如何从发电机流向终端
-    /// </summary>
     public class PowerSimulationSystem : MonoBehaviour
     {
         public static PowerSimulationSystem Instance { get; private set; }
-
-        // 定义上下左右四个相邻方向
-        private readonly Vector2Int[] directions = new Vector2Int[]
-        {
-            new Vector2Int(0, 1),  // 上
-            new Vector2Int(0, -1), // 下
-            new Vector2Int(-1, 0), // 左
-            new Vector2Int(1, 0)   // 右
-        };
 
         private void Awake()
         {
@@ -28,138 +16,94 @@ namespace ProjectPowerSystemsEngineer.Simulation
             else Destroy(gameObject);
         }
 
-        private void Update()
-        {
-            // 测试按键：按 P 键手动触发一次全局电力模拟计算
-            if (UnityEngine.InputSystem.Keyboard.current.pKey.wasPressedThisFrame)
-            {
-                RecalculatePowerGrid();
-            }
-        }
-
         /// <summary>
-        /// 核心算法：重新计算全网电力流向
+        /// 基于图论“拓扑排序(Topological Sort)”的全网电力计算
+        /// 能完美解决多路汇流、分流以及防止闭环死循环的问题
         /// </summary>
         public void RecalculatePowerGrid()
         {
-            Debug.Log(">>> 开始进行全网电力拓扑计算...");
+            PowerNode[] allNodes = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
 
-            // 1. 获取全图所有有物体的格子，并提取出 PowerNode
-            List<PowerNode> allNodes = new List<PowerNode>();
-            List<PowerNode> generators = new List<PowerNode>();
-
-            // 遍历整个地图 (可以通过给 GridManager 增加一个 GetAllOccupiedCells() 方法来优化，这里先做全图遍历)
-            for (int x = -GridManager.Instance.width / 2; x < GridManager.Instance.width / 2; x++)
+            // 1. 初始化状态，并计算所有节点的“入度” (In-Degree)
+            Dictionary<PowerNode, int> inDegrees = new Dictionary<PowerNode, int>();
+            foreach (var node in allNodes)
             {
-                for (int z = -GridManager.Instance.height / 2; z < GridManager.Instance.height / 2; z++)
-                {
-                    GridCell cell = GridManager.Instance.GetCell(new Vector2Int(x, z));
-                    if (cell != null && cell.IsOccupied)
-                    {
-                        PowerNode node = cell.PlacedObject.GetComponent<PowerNode>();
-                        if (node != null)
-                        {
-                            // 每次重新计算前，把所有节点的输入清零
-                            node.ReceivePower(0f, 100f);
-                            allNodes.Add(node);
+                node.ReceivePower(0f, 10f); // 每次计算前，重置所有节点的输入为 0
+                inDegrees[node] = 0;
+            }
 
-                            // 如果是发电机，加入源头列表
-                            if (node.data.category == ComponentCategory.Generation)
-                            {
-                                generators.Add(node);
-                            }
-                        }
+            // 遍历所有有向连线，累加目标的入度
+            foreach (var node in allNodes)
+            {
+                foreach (var target in node.OutgoingConnections)
+                {
+                    if (inDegrees.ContainsKey(target))
+                    {
+                        inDegrees[target]++;
                     }
                 }
             }
 
-            // 2. 从所有发电机开始进行 BFS (广度优先搜索) 泛洪算法
-            foreach (var gen in generators)
+            // 2. 将所有入度为 0 的节点（通常是发电机，或者是没连源头的断头线）加入队列
+            Queue<PowerNode> queue = new Queue<PowerNode>();
+            foreach (var node in allNodes)
             {
-                SimulateFlowFromGenerator(gen);
+                if (inDegrees[node] == 0)
+                {
+                    // 如果是发电机，给自己赋予初始电量
+                    if (node.data.category == ComponentCategory.Generation)
+                    {
+                        node.ReceivePower(node.data.powerGeneration, 10f);
+                    }
+                    queue.Enqueue(node);
+                }
             }
 
-            Debug.Log("<<< 电力拓扑计算完成！");
-        }
-
-        private void SimulateFlowFromGenerator(PowerNode generator)
-        {
-            // 队列用于 BFS 寻路 (存储：当前处理的节点)
-            Queue<PowerNode> queue = new Queue<PowerNode>();
-            // 记录已经访问过的节点，防止无限死循环
-            HashSet<PowerNode> visited = new HashSet<PowerNode>();
-
-            // 发电机自身产生电力并入队
-            generator.ReceivePower(generator.GetPowerOutput(), generator.GetStabilityOutput());
-            queue.Enqueue(generator);
-            visited.Add(generator);
-
+            // 3. 开始如流水般往下游分配电力
             while (queue.Count > 0)
             {
-                PowerNode currentNode = queue.Dequeue();
+                PowerNode current = queue.Dequeue();
 
-                // 节点当前的输出能力
-                float outPower = currentNode.GetPowerOutput();
-                float outStability = currentNode.GetStabilityOutput();
+                // 获取该节点经过损耗和过载判断后，能输出的真实能力
+                float outPower = current.GetPowerOutput();
+                float outStability = current.GetStabilityOutput();
 
-                // 如果经过消耗后没有电了，就不往下传了
-                if (outPower <= 0) continue;
+                int validPaths = current.OutgoingConnections.Count;
 
-                // 寻找四周相邻的相连节点
-                List<PowerNode> connectedNeighbors = GetConnectedNeighbors(currentNode.GridPosition);
-
-                // 根据你的GDD：“分流器将输入电流平均分配到出口”。
-                // 在初级版本中，我们假设如果一根线分叉了，电流就平分（比如分两路，每路拿 50%）
-                int validPaths = 0;
-                foreach (var neighbor in connectedNeighbors)
+                // 如果有输出电量，并且连了下游节点
+                if (validPaths > 0 && outPower > 0)
                 {
-                    if (!visited.Contains(neighbor)) validPaths++;
-                }
+                    float powerPerPath = outPower / validPaths; // 电流平分定律
 
-                if (validPaths > 0)
-                {
-                    float powerPerPath = outPower / validPaths;
-
-                    foreach (var neighbor in connectedNeighbors)
+                    foreach (var target in current.OutgoingConnections)
                     {
-                        if (!visited.Contains(neighbor))
+                        // 目标节点接收电力（注意这里是累加目标已有的电量，实现多根线汇流加算）
+                        target.ReceivePower(target.CurrentPowerInput + powerPerPath, outStability);
+
+                        // 扣除目标的入度。当它的上游全部计算完毕时，加入队列
+                        if (inDegrees.ContainsKey(target))
                         {
-                            // 邻居节点接收电力！
-                            neighbor.ReceivePower(neighbor.CurrentPowerInput + powerPerPath, outStability);
-
-                            visited.Add(neighbor);
-
-                            // 只有传输类组件 (电线) 才能继续往外传电，终端(Consumer)收到电就截止了
-                            if (neighbor.data.category == ComponentCategory.Transmission)
-                            {
-                                queue.Enqueue(neighbor);
-                            }
+                            inDegrees[target]--;
+                            if (inDegrees[target] == 0) queue.Enqueue(target);
+                        }
+                    }
+                }
+                else
+                {
+                    // 即使没有电传下去，也要把下游节点的依赖解除，防止下游死锁无法计算
+                    foreach (var target in current.OutgoingConnections)
+                    {
+                        if (inDegrees.ContainsKey(target))
+                        {
+                            inDegrees[target]--;
+                            if (inDegrees[target] == 0) queue.Enqueue(target);
                         }
                     }
                 }
             }
-        }
 
-        // 查找当前坐标上下左右四个方向是否有合法的 PowerNode
-        private List<PowerNode> GetConnectedNeighbors(Vector2Int pos)
-        {
-            List<PowerNode> neighbors = new List<PowerNode>();
-
-            foreach (var dir in directions)
-            {
-                Vector2Int neighborPos = pos + dir;
-                GridCell neighborCell = GridManager.Instance.GetCell(neighborPos);
-
-                if (neighborCell != null && neighborCell.IsOccupied && !neighborCell.IsOnFire)
-                {
-                    PowerNode nNode = neighborCell.PlacedObject.GetComponent<PowerNode>();
-                    if (nNode != null)
-                    {
-                        neighbors.Add(nNode);
-                    }
-                }
-            }
-            return neighbors;
+            // 拓扑排序的精妙之处：如果玩家胡乱连了一个 A->B->A 的循环死环，它们会因为入度永远不为 0 而卡住。
+            // 在我们的游戏里，这表现为死环里的设备全部失去电力（值为0），完美符合“短路”的物理直觉！
         }
     }
 }
