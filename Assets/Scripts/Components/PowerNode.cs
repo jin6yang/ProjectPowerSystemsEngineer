@@ -18,9 +18,6 @@ namespace ProjectPowerSystemsEngineer.Components
 
         public List<PowerNode> OutgoingConnections { get; private set; } = new List<PowerNode>();
 
-        /// <summary>
-        /// 常规地面建筑的初始化
-        /// </summary>
         public virtual void Initialize(Vector2Int pos)
         {
             GridPosition = pos;
@@ -30,40 +27,34 @@ namespace ProjectPowerSystemsEngineer.Components
             OutgoingConnections.Clear();
         }
 
-        /// <summary>
-        /// 【新增】电缆专用的初始化逻辑
-        /// </summary>
         public virtual void InitializeAsCable(PowerNode startNode, PowerNode endNode)
         {
-            // 电线不严格占据独立网格，暂时沿用起点的坐标
             GridPosition = startNode.GridPosition;
             CurrentPowerInput = 0f;
             CurrentStability = 10f;
             IsProtectionTripped = false;
             OutgoingConnections.Clear();
 
-            // 建立逻辑关联： 起点建筑 -> 这根电线 -> 终点建筑
             startNode.OutgoingConnections.Add(this);
             this.OutgoingConnections.Add(endNode);
 
-            // 如果电线预制体上挂载了 LineRenderer（线段渲染器），则自动设置两端位置
             LineRenderer lr = GetComponent<LineRenderer>();
             if (lr != null)
             {
-                // 抬高一点 Y 轴，防止电线埋在地里
                 Vector3 startPos = startNode.transform.position + Vector3.up * 1f;
                 Vector3 endPos = endNode.transform.position + Vector3.up * 1f;
                 lr.SetPosition(0, startPos);
                 lr.SetPosition(1, endPos);
             }
-
-            Debug.Log($"[电网建立] 铺设了一条 {data.componentName}：由 {startNode.data.componentName} 连向 {endNode.data.componentName}");
         }
 
         public virtual void ReceivePower(float power, float stability)
         {
+            // 核心修复：多路电流汇合时，纯净度(稳定性)取最差的那一路
+            if (CurrentPowerInput == 0) CurrentStability = stability;
+            else CurrentStability = Mathf.Min(CurrentStability, stability);
+
             CurrentPowerInput = power;
-            CurrentStability = stability;
 
             CheckOverload();
         }
@@ -84,22 +75,30 @@ namespace ProjectPowerSystemsEngineer.Components
             Debug.LogWarning($"[警报] {data.componentName} 过载！输入:{CurrentPowerInput}MW / 上限:{data.maxPowerCapacity}MW。已触发保护系统，切断输出！");
         }
 
-        // 极其好用的内置 GUI：在模型头顶直接绘制 2D 数据面板
+        // ==================== 动态缩放浮空 GUI ====================
         private void OnGUI()
         {
             if (Camera.main == null || data == null) return;
 
-            // 将 3D 世界坐标转换为 2D 屏幕坐标 (头顶上方1.5米处)
-            Vector3 screenPos = Camera.main.WorldToScreenPoint(transform.position + Vector3.up * 1.5f);
+            Vector3 worldPos = transform.position + Vector3.up * 1.5f;
+            Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
 
-            // 确保物体在摄像机前方才绘制
             if (screenPos.z > 0)
             {
-                screenPos.y = Screen.height - screenPos.y; // 翻转 Y 轴适应 GUI 系统
+                screenPos.y = Screen.height - screenPos.y;
+
+                // 核心计算：计算摄像机与此建筑的物理距离，反比计算缩放倍率
+                float distance = Vector3.Distance(Camera.main.transform.position, worldPos);
+                // 15f 是我们设定的理想视觉基准距离
+                float scaleFactor = 15f / Mathf.Max(distance, 1f);
+
+                // 动态计算字体大小，并限制最小和最大值防止穿模
+                int dynamicFontSize = Mathf.RoundToInt(14 * scaleFactor);
+                dynamicFontSize = Mathf.Clamp(dynamicFontSize, 8, 32);
 
                 GUIStyle style = new GUIStyle();
                 style.alignment = TextAnchor.MiddleCenter;
-                style.fontSize = 14;
+                style.fontSize = dynamicFontSize;
                 style.fontStyle = FontStyle.Bold;
 
                 Color textColor;
@@ -108,27 +107,35 @@ namespace ProjectPowerSystemsEngineer.Components
                 if (IsProtectionTripped)
                 {
                     statusText = "[过载保护]\n";
-                    textColor = new Color(1f, 0.4f, 0.4f); // 柔和的红色
+                    textColor = new Color(1f, 0.4f, 0.4f);
                 }
                 else if (CurrentPowerInput > 0 || (data.category == ComponentCategory.Generation && data.powerGeneration > 0))
                 {
                     statusText = "[运行中]\n";
-                    textColor = new Color(0.4f, 1f, 0.4f); // 科技感的绿色
+                    textColor = new Color(0.4f, 1f, 0.4f);
                 }
                 else
                 {
-                    statusText = "[离线/无输入]\n";
-                    textColor = new Color(0.7f, 0.7f, 0.7f); // 灰色
+                    statusText = "[无输入]\n";
+                    textColor = new Color(0.7f, 0.7f, 0.7f);
                 }
 
-                string displayText = $"{statusText}{data.componentName}\n输入: {CurrentPowerInput} MW\n稳定度: {CurrentStability}";
+                string displayText = $"{statusText}{data.componentName}\n{CurrentPowerInput} MW | S:{CurrentStability}";
 
-                // 绘制黑色文字阴影，防止在亮色背景下看不清
-                Rect rect = new Rect(screenPos.x - 100, screenPos.y - 50, 200, 100);
+                // 动态调整背景矩形框的大小，以适应大号字体
+                float rectWidth = 150 * scaleFactor;
+                float rectHeight = 80 * scaleFactor;
+                // 给框体一个下限，防止拉得太远缩没了
+                rectWidth = Mathf.Max(rectWidth, 100);
+                rectHeight = Mathf.Max(rectHeight, 50);
+
+                Rect rect = new Rect(screenPos.x - rectWidth / 2, screenPos.y - rectHeight / 2, rectWidth, rectHeight);
+
+                // 画个纯黑底影，防强光看不清
                 style.normal.textColor = Color.black;
-                GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width, rect.height), displayText, style);
+                GUI.Label(new Rect(rect.x + 2, rect.y + 2, rect.width, rect.height), displayText, style);
 
-                // 绘制带状态颜色的主文字
+                // 画带颜色的本体
                 style.normal.textColor = textColor;
                 GUI.Label(rect, displayText, style);
             }
