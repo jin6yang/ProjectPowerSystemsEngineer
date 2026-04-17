@@ -261,6 +261,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: e18b8c8148277014ab748966ebcb9e44, type: 2}
   validGhostMaterial: {fileID: 2100000, guid: 28b66dd374bedd94381e5b11a40bd321, type: 2}
   invalidGhostMaterial: {fileID: 2100000, guid: 3ac3c7de0954d1b46b6477d52419a4a6, type: 2}
+  selectionIndicatorPrefab: {fileID: 1930333054732221092, guid: 5f00f9422e3203643809e8c38b84ef88, type: 3}
   dragThreshold: 10
 --- !u!1 &832976572
 GameObject:
