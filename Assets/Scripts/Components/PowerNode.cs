@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using ProjectPowerSystemsEngineer.Data;
 using ProjectPowerSystemsEngineer.Grid;
+using ProjectPowerSystemsEngineer.UI; // 【新增】引入 UI 命名空间以获取全局变量
 
 namespace ProjectPowerSystemsEngineer.Components
 {
@@ -78,7 +79,8 @@ namespace ProjectPowerSystemsEngineer.Components
         // ==================== 动态缩放浮空 GUI ====================
         private void OnGUI()
         {
-            if (Camera.main == null || data == null) return;
+            // 【核心修改】如果 UIManager 里的开关被关闭，直接跳过绘制，实现瞬间隐藏
+            if (!UIManager.ShowFloatingUI || Camera.main == null || data == null) return;
 
             Vector3 worldPos = transform.position + Vector3.up * 1.5f;
             Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
