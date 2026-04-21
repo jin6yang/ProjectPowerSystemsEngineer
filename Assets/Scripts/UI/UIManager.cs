@@ -136,8 +136,12 @@ namespace ProjectPowerSystemsEngineer.UI
         {
             if (fadeCoroutine != null) StopCoroutine(fadeCoroutine);
             fadeCoroutine = StartCoroutine(FadeCanvasGroup(inspectPanelGroup, targetAlpha, 0.2f));
-            // 字幕跟随详情面板一起淡入淡出
-            StartCoroutine(FadeCanvasGroup(topMarqueeGroup, targetAlpha, 0.2f));
+
+            // 安全检查：如果还没做 TopMarqueePanel，跳过它的动画，防止报错
+            if (topMarqueeGroup != null)
+            {
+                StartCoroutine(FadeCanvasGroup(topMarqueeGroup, targetAlpha, 0.2f));
+            }
         }
 
         private IEnumerator FadeCanvasGroup(CanvasGroup cg, float targetAlpha, float duration)
@@ -147,7 +151,6 @@ namespace ProjectPowerSystemsEngineer.UI
             float startAlpha = cg.alpha;
             float time = 0;
 
-            // 如果是出现，立即允许交互
             if (targetAlpha > 0) cg.interactable = cg.blocksRaycasts = true;
 
             while (time < duration)
@@ -158,38 +161,37 @@ namespace ProjectPowerSystemsEngineer.UI
             }
 
             cg.alpha = targetAlpha;
-
-            // 如果是消失，关闭交互
             if (targetAlpha == 0) cg.interactable = cg.blocksRaycasts = false;
         }
 
         private void PlayWipeAnimation()
         {
-            if (wipeBlock == null || wipeBlockGroup == null) return;
+            if (wipeBlock == null || wipeBlockGroup == null || inspectPanelGroup == null) return;
             if (wipeCoroutine != null) StopCoroutine(wipeCoroutine);
             wipeCoroutine = StartCoroutine(WipeRoutine());
         }
 
         private IEnumerator WipeRoutine()
         {
-            // 动画准备：让黄块变完全不透明，并将其移到面板最左侧外面
             wipeBlockGroup.alpha = 1f;
+
+            // 获取父面板的宽度
             float panelWidth = inspectPanelGroup.GetComponent<RectTransform>().rect.width;
 
-            // 假设黄块的宽度和面板一样宽，从左侧滑入
-            wipeBlock.anchoredPosition = new Vector2(-panelWidth, 0);
+            // 确保起始点在面板最左侧往外一点（防止露馅）
+            float startPosX = -panelWidth - 50f;
+            wipeBlock.anchoredPosition = new Vector2(startPosX, 0);
 
-            // 阶段 1：快速从左滑到正中央 (0.15秒)
+            // 阶段 1：快速滑到原点 (0.15秒)
             float moveTime = 0.15f;
             float timer = 0;
             while (timer < moveTime)
             {
                 timer += Time.deltaTime;
-                // 使用类似 EaseOut 的曲线让移动更顺滑
                 float t = timer / moveTime;
-                t = 1f - Mathf.Pow(1f - t, 3);
+                t = 1f - Mathf.Pow(1f - t, 3); // EaseOut 缓动曲线
 
-                wipeBlock.anchoredPosition = new Vector2(Mathf.Lerp(-panelWidth, 0, t), 0);
+                wipeBlock.anchoredPosition = new Vector2(Mathf.Lerp(startPosX, 0, t), 0);
                 yield return null;
             }
             wipeBlock.anchoredPosition = Vector2.zero;
