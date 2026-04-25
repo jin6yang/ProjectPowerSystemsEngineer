@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using System.Collections;
 using ProjectPowerSystemsEngineer.Systems;
@@ -22,16 +23,25 @@ namespace ProjectPowerSystemsEngineer.UI
         public RectTransform wipeBlock;
         private CanvasGroup wipeBlockGroup;
 
-        [Header("Text Elements")]
+        [Header("Text & Icon Elements")]
         public TextMeshProUGUI txtComponentName;
         public TextMeshProUGUI txtStatus;
         public TextMeshProUGUI txtPowerInput;
         public TextMeshProUGUI txtStability;
-        [Tooltip("用于独立排版显示最大承载量 (例如: / 1.0 G)")]
         public TextMeshProUGUI txtMaxCapacity;
+
+        [Header("Dynamic Icons")]
+        public Image imgPowerIcon;
+        [Tooltip("正常通电时的黄色闪电图标")]
+        public Sprite iconOnline;
+        [Tooltip("断电/待机时的灰色插头图标")]
+        public Sprite iconOffline;
+        [Tooltip("过载时的红色断开图标")]
+        public Sprite iconOverload;
 
         [Header("Colors")]
         public Color colorNormal = new Color(0.4f, 1f, 0.4f);
+        public Color colorWarning = new Color(1f, 0.84f, 0f);
         public Color colorOverload = new Color(1f, 0.4f, 0.4f);
         public Color colorOffline = new Color(0.6f, 0.6f, 0.6f);
 
@@ -88,45 +98,59 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private void UpdateInspectPanel(PowerNode node)
         {
-            // 1. 组件名称
             txtComponentName.text = node.data.componentName.ToUpper();
 
-            // 2. 极简状态码更新
+            // 核心修改：状态改变时，动态替换 Sprite，并确保 Image 的底色是纯白（以显示 PNG 原色）
             if (node.IsProtectionTripped)
             {
                 txtStatus.text = "[SYS_OVERLOAD]";
                 txtStatus.color = colorOverload;
                 txtPowerInput.color = colorOverload;
+
+                if (imgPowerIcon != null && iconOverload != null)
+                {
+                    imgPowerIcon.sprite = iconOverload;
+                    imgPowerIcon.color = Color.white; // 重置为纯白，不干扰图片原有的红色
+                }
             }
             else if (node.CurrentPowerInput > 0 || node.data.powerGeneration > 0)
             {
                 txtStatus.text = "[SYS_ONLINE]";
                 txtStatus.color = colorNormal;
                 txtPowerInput.color = Color.white;
+
+                if (imgPowerIcon != null && iconOnline != null)
+                {
+                    imgPowerIcon.sprite = iconOnline;
+                    imgPowerIcon.color = Color.white; // 重置为纯白，显示图片原有的黄色
+                }
             }
             else
             {
                 txtStatus.text = "[SYS_STANDBY]";
                 txtStatus.color = colorOffline;
                 txtPowerInput.color = colorOffline;
+
+                if (imgPowerIcon != null && iconOffline != null)
+                {
+                    imgPowerIcon.sprite = iconOffline;
+                    imgPowerIcon.color = Color.white; // 重置为纯白，显示图片原有的灰色
+                }
             }
 
-            // 3. 动态电力单位排版 (重新拆分为独立文本)
             string currentPowerStr = FormatPowerValue(node.CurrentPowerInput);
             string maxPowerStr = FormatPowerValue(node.data.maxPowerCapacity);
 
-            txtPowerInput.text = $"⚡ {currentPowerStr}";
+            txtPowerInput.text = currentPowerStr;
 
             if (txtMaxCapacity != null)
             {
                 txtMaxCapacity.text = $"/ {maxPowerStr}";
             }
 
-            // 4. 稳定度
             txtStability.text = $"STB_LVL: {node.CurrentStability:0.0}";
         }
 
-        // --- 核心换算逻辑：大于等于 1000 自动转 G ---
         private string FormatPowerValue(float mwValue)
         {
             if (mwValue >= 1000f)
