@@ -1,7 +1,7 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.InputSystem;
-using System.Collections; // 引入协程
+using System.Collections;
 using ProjectPowerSystemsEngineer.Systems;
 using ProjectPowerSystemsEngineer.Components;
 
@@ -15,13 +15,10 @@ namespace ProjectPowerSystemsEngineer.UI
         public BuilderController builderController;
 
         [Header("UI Containers")]
-        [Tooltip("右下角的详情面板")]
         public CanvasGroup inspectPanelGroup;
-        [Tooltip("顶部的滚动字幕面板")]
         public CanvasGroup topMarqueeGroup;
 
         [Header("Animation Elements")]
-        [Tooltip("用于切换加载动画的工业黄背景块")]
         public RectTransform wipeBlock;
         private CanvasGroup wipeBlockGroup;
 
@@ -30,6 +27,7 @@ namespace ProjectPowerSystemsEngineer.UI
         public TextMeshProUGUI txtStatus;
         public TextMeshProUGUI txtPowerInput;
         public TextMeshProUGUI txtStability;
+        [Tooltip("用于独立排版显示最大承载量 (例如: / 1.0 G)")]
         public TextMeshProUGUI txtMaxCapacity;
 
         [Header("Colors")]
@@ -37,7 +35,6 @@ namespace ProjectPowerSystemsEngineer.UI
         public Color colorOverload = new Color(1f, 0.4f, 0.4f);
         public Color colorOffline = new Color(0.6f, 0.6f, 0.6f);
 
-        // 状态追踪
         private PowerNode lastSelectedNode = null;
         private Coroutine fadeCoroutine;
         private Coroutine wipeCoroutine;
@@ -45,13 +42,10 @@ namespace ProjectPowerSystemsEngineer.UI
         private void Start()
         {
             if (builderController == null) builderController = FindAnyObjectByType<BuilderController>();
-
             if (wipeBlock != null) wipeBlockGroup = wipeBlock.GetComponent<CanvasGroup>();
 
-            // 初始化时隐藏 UI，设置透明度为 0，并且关闭交互以阻挡点击
             SetCanvasGroupState(inspectPanelGroup, 0f, false);
             SetCanvasGroupState(topMarqueeGroup, 0f, false);
-
             if (wipeBlockGroup != null) SetCanvasGroupState(wipeBlockGroup, 0f, false);
         }
 
@@ -64,32 +58,27 @@ namespace ProjectPowerSystemsEngineer.UI
 
             if (builderController == null) return;
 
-            // 获取当前选中的节点（排除电线，因为电线不在此面板显示）
             PowerNode currentSelected = builderController.SelectedNode;
             if (currentSelected != null && currentSelected.data.isPointToPointCable)
             {
                 currentSelected = null;
             }
 
-            // 核心逻辑：检测选中状态是否发生了“变化”
             if (currentSelected != lastSelectedNode)
             {
                 if (currentSelected != null && lastSelectedNode == null)
                 {
-                    // 1. 从“无”到“有” -> 淡入主面板，并执行擦除加载动画
                     UpdateInspectPanel(currentSelected);
                     PlayFadeAnimation(1f);
                     PlayWipeAnimation();
                 }
                 else if (currentSelected != null && lastSelectedNode != null)
                 {
-                    // 2. 连续切换不同的建筑 -> 保持面板显示，仅执行擦除加载动画
                     UpdateInspectPanel(currentSelected);
                     PlayWipeAnimation();
                 }
                 else if (currentSelected == null && lastSelectedNode != null)
                 {
-                    // 3. 取消选中 -> 淡出主面板
                     PlayFadeAnimation(0f);
                 }
 
@@ -99,30 +88,55 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private void UpdateInspectPanel(PowerNode node)
         {
+            // 1. 组件名称
             txtComponentName.text = node.data.componentName.ToUpper();
 
+            // 2. 极简状态码更新
             if (node.IsProtectionTripped)
             {
-                txtStatus.text = "SYS_OVERLOAD // 保护熔断";
+                txtStatus.text = "[SYS_OVERLOAD]";
                 txtStatus.color = colorOverload;
                 txtPowerInput.color = colorOverload;
             }
             else if (node.CurrentPowerInput > 0 || node.data.powerGeneration > 0)
             {
-                txtStatus.text = "SYS_ONLINE // 正常运行";
+                txtStatus.text = "[SYS_ONLINE]";
                 txtStatus.color = colorNormal;
                 txtPowerInput.color = Color.white;
             }
             else
             {
-                txtStatus.text = "SYS_STANDBY // 离线等待";
+                txtStatus.text = "[SYS_STANDBY]";
                 txtStatus.color = colorOffline;
                 txtPowerInput.color = colorOffline;
             }
 
-            txtPowerInput.text = $"{node.CurrentPowerInput:000.0} <size=60%>MW</size>";
-            txtMaxCapacity.text = $"MAX: {node.data.maxPowerCapacity} MW";
+            // 3. 动态电力单位排版 (重新拆分为独立文本)
+            string currentPowerStr = FormatPowerValue(node.CurrentPowerInput);
+            string maxPowerStr = FormatPowerValue(node.data.maxPowerCapacity);
+
+            txtPowerInput.text = $"⚡ {currentPowerStr}";
+
+            if (txtMaxCapacity != null)
+            {
+                txtMaxCapacity.text = $"/ {maxPowerStr}";
+            }
+
+            // 4. 稳定度
             txtStability.text = $"STB_LVL: {node.CurrentStability:0.0}";
+        }
+
+        // --- 核心换算逻辑：大于等于 1000 自动转 G ---
+        private string FormatPowerValue(float mwValue)
+        {
+            if (mwValue >= 1000f)
+            {
+                return $"{mwValue / 1000f:0.0} G";
+            }
+            else
+            {
+                return $"{mwValue:0.0} M";
+            }
         }
 
         public void ToggleFloatingUI()
@@ -130,18 +144,11 @@ namespace ProjectPowerSystemsEngineer.UI
             ShowFloatingUI = !ShowFloatingUI;
         }
 
-        // ==================== 原生代码动画引擎 ====================
-
         private void PlayFadeAnimation(float targetAlpha)
         {
             if (fadeCoroutine != null) StopCoroutine(fadeCoroutine);
             fadeCoroutine = StartCoroutine(FadeCanvasGroup(inspectPanelGroup, targetAlpha, 0.2f));
-
-            // 安全检查：如果还没做 TopMarqueePanel，跳过它的动画，防止报错
-            if (topMarqueeGroup != null)
-            {
-                StartCoroutine(FadeCanvasGroup(topMarqueeGroup, targetAlpha, 0.2f));
-            }
+            if (topMarqueeGroup != null) StartCoroutine(FadeCanvasGroup(topMarqueeGroup, targetAlpha, 0.2f));
         }
 
         private IEnumerator FadeCanvasGroup(CanvasGroup cg, float targetAlpha, float duration)
@@ -174,32 +181,26 @@ namespace ProjectPowerSystemsEngineer.UI
         private IEnumerator WipeRoutine()
         {
             wipeBlockGroup.alpha = 1f;
-
-            // 获取父面板的宽度
             float panelWidth = inspectPanelGroup.GetComponent<RectTransform>().rect.width;
 
-            // 确保起始点在面板最左侧往外一点（防止露馅）
             float startPosX = -panelWidth - 50f;
             wipeBlock.anchoredPosition = new Vector2(startPosX, 0);
 
-            // 阶段 1：快速滑到原点 (0.15秒)
             float moveTime = 0.15f;
             float timer = 0;
             while (timer < moveTime)
             {
                 timer += Time.deltaTime;
                 float t = timer / moveTime;
-                t = 1f - Mathf.Pow(1f - t, 3); // EaseOut 缓动曲线
+                t = 1f - Mathf.Pow(1f - t, 3);
 
                 wipeBlock.anchoredPosition = new Vector2(Mathf.Lerp(startPosX, 0, t), 0);
                 yield return null;
             }
             wipeBlock.anchoredPosition = Vector2.zero;
 
-            // 阶段 2：短暂悬停模拟“读取中” (0.05秒)
             yield return new WaitForSeconds(0.05f);
 
-            // 阶段 3：原地淡出 (0.2秒)
             float fadeTime = 0.2f;
             timer = 0;
             while (timer < fadeTime)
