@@ -26,6 +26,10 @@ namespace ProjectPowerSystemsEngineer.Data
         [Tooltip("建造时跟随鼠标移动的预览残影预制体")]
         public GameObject ghostPrefab;
 
+        [Header("UI & Presentation")]
+        [Tooltip("在建造菜单中显示的 2D 图标 (如果不填则只显示文字)")]
+        public Sprite uiIcon;
+
         [Header("Economy")]
         [Tooltip("建造该组件的花费 (对应GDD第五阶段试用期经济系统)")]
         public int buildCost = 100;
