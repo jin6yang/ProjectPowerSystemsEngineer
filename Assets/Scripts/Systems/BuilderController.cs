@@ -28,6 +28,7 @@ namespace ProjectPowerSystemsEngineer.Systems
         public PowerNode SelectedNode { get; private set; }
         public Vector2Int? SelectedGridPosition { get; private set; }
 
+        public bool IsBuildingMode => isBuildingMode; // 【新增】公开建造状态供 UI 读取
         private bool isBuildingMode = false;
         private int currentSelectedIndex = 0;
 
@@ -315,6 +316,27 @@ namespace ProjectPowerSystemsEngineer.Systems
                 if (cell != null && cell.IsOccupied) return cell.PlacedObject.GetComponent<PowerNode>();
             }
             return null;
+        }
+
+        // 【新增】供 UI 按钮调用的专用公开方法
+        public void EnterBuildModeFromUI(int index)
+        {
+            if (availableComponents == null || index < 0 || index >= availableComponents.Length) return;
+
+            currentSelectedIndex = index;
+
+            // 如果还没进入建造模式，强制进入
+            if (!isBuildingMode)
+            {
+                isBuildingMode = true;
+                Debug.Log(">>> UI 触发：进入建造模式！");
+            }
+
+            ClearSelection();
+            RefreshGhost();
+            CancelCablePlacement();
+
+            Debug.Log($"[Builder] UI选中并准备建造: {SelectedComponent.componentName}");
         }
 
         private void ToggleBuildMode()
