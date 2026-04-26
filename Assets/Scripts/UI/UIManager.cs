@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 using System.Collections;
 using ProjectPowerSystemsEngineer.Systems;
 using ProjectPowerSystemsEngineer.Components;
+using ProjectPowerSystemsEngineer.Data;
 
 namespace ProjectPowerSystemsEngineer.UI
 {
@@ -15,28 +16,36 @@ namespace ProjectPowerSystemsEngineer.UI
         [Header("System References")]
         public BuilderController builderController;
 
-        [Header("UI Containers")]
+        [Header("UI Containers - Inspect")]
         public CanvasGroup inspectPanelGroup;
         public CanvasGroup topMarqueeGroup;
-
-        [Header("Animation Elements")]
         public RectTransform wipeBlock;
         private CanvasGroup wipeBlockGroup;
 
-        [Header("Text & Icon Elements")]
+        [Header("UI Containers - Build Menu")]
+        [Tooltip("底部的建造面板整体(用于动画滑动)")]
+        public RectTransform buildPanel;
+        private CanvasGroup buildPanelGroup;
+        [Tooltip("按钮们的父物体，挂载了 Layout Group 的那个对象")]
+        public Transform buildButtonContainer;
+        [Tooltip("左下角工具栏的开关按钮图标 Image")]
+        public Image imgToggleMenuIcon;
+        [Tooltip("Lucide 的 panel-bottom-open 图标 (菜单关闭时显示，暗示可以打开)")]
+        public Sprite iconMenuOpen;
+        [Tooltip("Lucide 的 panel-bottom-close 图标 (菜单打开时显示，暗示可以关闭)")]
+        public Sprite iconMenuClose;
+        [Tooltip("我们要动态生成的建造按钮预制体")]
+        public GameObject buildButtonPrefab;
+
+        [Header("Inspect Text & Icons")]
         public TextMeshProUGUI txtComponentName;
         public TextMeshProUGUI txtStatus;
         public TextMeshProUGUI txtPowerInput;
         public TextMeshProUGUI txtStability;
         public TextMeshProUGUI txtMaxCapacity;
-
-        [Header("Dynamic Icons")]
         public Image imgPowerIcon;
-        [Tooltip("正常通电时的黄色闪电图标")]
         public Sprite iconOnline;
-        [Tooltip("断电/待机时的灰色插头图标")]
         public Sprite iconOffline;
-        [Tooltip("过载时的红色断开图标")]
         public Sprite iconOverload;
 
         [Header("Colors")]
@@ -49,14 +58,30 @@ namespace ProjectPowerSystemsEngineer.UI
         private Coroutine fadeCoroutine;
         private Coroutine wipeCoroutine;
 
+        private bool isBuildMenuOpen = false;
+        private Coroutine buildMenuAnimCoroutine;
+        private float buildPanelHiddenY = -150f; // 隐藏时在屏幕下方的 Y 坐标
+        private float buildPanelShownY = 20f;    // 显示时的 Y 坐标边距
+
         private void Start()
         {
             if (builderController == null) builderController = FindAnyObjectByType<BuilderController>();
             if (wipeBlock != null) wipeBlockGroup = wipeBlock.GetComponent<CanvasGroup>();
 
+            if (buildPanel != null)
+            {
+                buildPanelGroup = buildPanel.GetComponent<CanvasGroup>();
+                // 初始化时让面板隐藏在屏幕下方
+                buildPanel.anchoredPosition = new Vector2(buildPanel.anchoredPosition.x, buildPanelHiddenY);
+                if (buildPanelGroup != null) SetCanvasGroupState(buildPanelGroup, 0f, false);
+            }
+
             SetCanvasGroupState(inspectPanelGroup, 0f, false);
             SetCanvasGroupState(topMarqueeGroup, 0f, false);
             if (wipeBlockGroup != null) SetCanvasGroupState(wipeBlockGroup, 0f, false);
+
+            // 【核心】游戏开始时，自动读取控制器数据，生成建造按钮
+            GenerateBuildMenu();
         }
 
         private void Update()
@@ -96,11 +121,114 @@ namespace ProjectPowerSystemsEngineer.UI
             }
         }
 
+        // ==================== 动态建造菜单系统 ====================
+
+        private void GenerateBuildMenu()
+        {
+            if (builderController == null || builderController.availableComponents == null || buildButtonPrefab == null || buildButtonContainer == null) return;
+
+            // 清空容器内原本的测试占位符
+            foreach (Transform child in buildButtonContainer) Destroy(child.gameObject);
+
+            for (int i = 0; i < builderController.availableComponents.Length; i++)
+            {
+                int capturedIndex = i; // C# 闭包陷阱：必须把 i 缓存到一个局部变量里供后续点击事件使用
+                ComponentData data = builderController.availableComponents[i];
+
+                GameObject btnObj = Instantiate(buildButtonPrefab, buildButtonContainer);
+
+                // 设置数据：寻找预制体下的文字组件 (假设第一个是名字，第二个是花费)
+                TextMeshProUGUI[] texts = btnObj.GetComponentsInChildren<TextMeshProUGUI>();
+                if (texts.Length > 0) texts[0].text = data.componentName;
+                if (texts.Length > 1) texts[1].text = $"$ {data.buildCost}";
+
+                // 设置图标：寻找预制体下的 Image组件 (假设除了背景外的另一个Image是图标槽)
+                Image[] images = btnObj.GetComponentsInChildren<Image>();
+                foreach (var img in images)
+                {
+                    // 约定：我们在预制体里把装图标的 Image 命名为 "Icon"
+                    if (img.gameObject.name == "Icon" && data.uiIcon != null)
+                    {
+                        img.sprite = data.uiIcon;
+                    }
+                }
+
+                // 绑定点击事件：点击后通知控制器
+                Button btn = btnObj.GetComponent<Button>();
+                if (btn != null)
+                {
+                    btn.onClick.AddListener(() =>
+                    {
+                        builderController.EnterBuildModeFromUI(capturedIndex);
+                    });
+                }
+            }
+        }
+
+        // 供左下角工具栏按钮调用
+        public void ToggleBuildMenu()
+        {
+            isBuildMenuOpen = !isBuildMenuOpen;
+
+            // 切换工具栏图标
+            if (imgToggleMenuIcon != null)
+            {
+                imgToggleMenuIcon.sprite = isBuildMenuOpen ? iconMenuClose : iconMenuOpen;
+            }
+
+            if (buildMenuAnimCoroutine != null) StopCoroutine(buildMenuAnimCoroutine);
+            buildMenuAnimCoroutine = StartCoroutine(SlideBuildMenuRoutine(isBuildMenuOpen));
+        }
+
+        private IEnumerator SlideBuildMenuRoutine(bool show)
+        {
+            if (buildPanel == null) yield break;
+
+            float targetY = show ? buildPanelShownY : buildPanelHiddenY;
+            float targetAlpha = show ? 1f : 0f;
+            float startY = buildPanel.anchoredPosition.y;
+            float startAlpha = buildPanelGroup != null ? buildPanelGroup.alpha : 1f;
+
+            float duration = 0.25f;
+            float timer = 0f;
+
+            if (show && buildPanelGroup != null)
+            {
+                buildPanelGroup.interactable = true;
+                buildPanelGroup.blocksRaycasts = true;
+            }
+
+            while (timer < duration)
+            {
+                timer += Time.deltaTime;
+                float t = timer / duration;
+                // 使用极其丝滑的 EaseOut 曲线 (Deceleration)
+                t = 1f - Mathf.Pow(1f - t, 3);
+
+                buildPanel.anchoredPosition = new Vector2(buildPanel.anchoredPosition.x, Mathf.Lerp(startY, targetY, t));
+                if (buildPanelGroup != null) buildPanelGroup.alpha = Mathf.Lerp(startAlpha, targetAlpha, t);
+
+                yield return null;
+            }
+
+            buildPanel.anchoredPosition = new Vector2(buildPanel.anchoredPosition.x, targetY);
+            if (buildPanelGroup != null)
+            {
+                buildPanelGroup.alpha = targetAlpha;
+                if (!show)
+                {
+                    buildPanelGroup.interactable = false;
+                    buildPanelGroup.blocksRaycasts = false;
+                }
+            }
+        }
+
+        // ==================== 检视面板与基础方法 ====================
+
         private void UpdateInspectPanel(PowerNode node)
         {
             txtComponentName.text = node.data.componentName.ToUpper();
 
-            // 核心修改：状态改变时，动态替换 Sprite，并确保 Image 的底色是纯白（以显示 PNG 原色）
             if (node.IsProtectionTripped)
             {
                 txtStatus.text = "[SYS_OVERLOAD]";
@@ -110,7 +238,7 @@ namespace ProjectPowerSystemsEngineer.UI
                 if (imgPowerIcon != null && iconOverload != null)
                 {
                     imgPowerIcon.sprite = iconOverload;
-                    imgPowerIcon.color = Color.white; // 重置为纯白，不干扰图片原有的红色
+                    imgPowerIcon.color = Color.white;
                 }
             }
             else if (node.CurrentPowerInput > 0 || node.data.powerGeneration > 0)
@@ -122,7 +250,7 @@ namespace ProjectPowerSystemsEngineer.UI
                 if (imgPowerIcon != null && iconOnline != null)
                 {
                     imgPowerIcon.sprite = iconOnline;
-                    imgPowerIcon.color = Color.white; // 重置为纯白，显示图片原有的黄色
+                    imgPowerIcon.color = Color.white;
                 }
             }
             else
@@ -134,39 +262,22 @@ namespace ProjectPowerSystemsEngineer.UI
                 if (imgPowerIcon != null && iconOffline != null)
                 {
                     imgPowerIcon.sprite = iconOffline;
-                    imgPowerIcon.color = Color.white; // 重置为纯白，显示图片原有的灰色
+                    imgPowerIcon.color = Color.white;
                 }
             }
 
-            string currentPowerStr = FormatPowerValue(node.CurrentPowerInput);
-            string maxPowerStr = FormatPowerValue(node.data.maxPowerCapacity);
-
-            txtPowerInput.text = currentPowerStr;
-
-            if (txtMaxCapacity != null)
-            {
-                txtMaxCapacity.text = $"/ {maxPowerStr}";
-            }
-
+            txtPowerInput.text = FormatPowerValue(node.CurrentPowerInput);
+            if (txtMaxCapacity != null) txtMaxCapacity.text = $"/ {FormatPowerValue(node.data.maxPowerCapacity)}";
             txtStability.text = $"STB_LVL: {node.CurrentStability:0.0}";
         }
 
         private string FormatPowerValue(float mwValue)
         {
-            if (mwValue >= 1000f)
-            {
-                return $"{mwValue / 1000f:0.0} G";
-            }
-            else
-            {
-                return $"{mwValue:0.0} M";
-            }
+            if (mwValue >= 1000f) return $"{mwValue / 1000f:0.0} G";
+            else return $"{mwValue:0.0} M";
         }
 
-        public void ToggleFloatingUI()
-        {
-            ShowFloatingUI = !ShowFloatingUI;
-        }
+        public void ToggleFloatingUI() { ShowFloatingUI = !ShowFloatingUI; }
 
         private void PlayFadeAnimation(float targetAlpha)
         {
@@ -178,10 +289,8 @@ namespace ProjectPowerSystemsEngineer.UI
         private IEnumerator FadeCanvasGroup(CanvasGroup cg, float targetAlpha, float duration)
         {
             if (cg == null) yield break;
-
             float startAlpha = cg.alpha;
             float time = 0;
-
             if (targetAlpha > 0) cg.interactable = cg.blocksRaycasts = true;
 
             while (time < duration)
@@ -190,7 +299,6 @@ namespace ProjectPowerSystemsEngineer.UI
                 cg.alpha = Mathf.Lerp(startAlpha, targetAlpha, time / duration);
                 yield return null;
             }
-
             cg.alpha = targetAlpha;
             if (targetAlpha == 0) cg.interactable = cg.blocksRaycasts = false;
         }
@@ -206,7 +314,6 @@ namespace ProjectPowerSystemsEngineer.UI
         {
             wipeBlockGroup.alpha = 1f;
             float panelWidth = inspectPanelGroup.GetComponent<RectTransform>().rect.width;
-
             float startPosX = -panelWidth - 50f;
             wipeBlock.anchoredPosition = new Vector2(startPosX, 0);
 
@@ -215,14 +322,11 @@ namespace ProjectPowerSystemsEngineer.UI
             while (timer < moveTime)
             {
                 timer += Time.deltaTime;
-                float t = timer / moveTime;
-                t = 1f - Mathf.Pow(1f - t, 3);
-
+                float t = 1f - Mathf.Pow(1f - timer / moveTime, 3);
                 wipeBlock.anchoredPosition = new Vector2(Mathf.Lerp(startPosX, 0, t), 0);
                 yield return null;
             }
             wipeBlock.anchoredPosition = Vector2.zero;
-
             yield return new WaitForSeconds(0.05f);
 
             float fadeTime = 0.2f;
