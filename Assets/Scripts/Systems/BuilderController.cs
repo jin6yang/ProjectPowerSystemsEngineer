@@ -1,10 +1,11 @@
-using UnityEngine;
-using UnityEngine.InputSystem;
-using System.Collections.Generic;
-using ProjectPowerSystemsEngineer.Grid;
-using ProjectPowerSystemsEngineer.Data;
 using ProjectPowerSystemsEngineer.Components;
+using ProjectPowerSystemsEngineer.Data;
+using ProjectPowerSystemsEngineer.Grid;
 using ProjectPowerSystemsEngineer.Simulation;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 
 namespace ProjectPowerSystemsEngineer.Systems
 {
@@ -67,6 +68,14 @@ namespace ProjectPowerSystemsEngineer.Systems
 
         void Update()
         {
+            // 【核心防穿透逻辑】：如果鼠标指针悬停在任何 UI 元素上方 (比如在点击建造面板)
+            // 就直接跳过这部分点击检测，防止在 UI 下面的 3D 地面上意外建造
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            {
+                // 此时只允许 UI 层处理点击，3D 世界的鼠标检测全部免疫！
+                return;
+            }
+
             if (Keyboard.current == null || Mouse.current == null) return;
 
             HandleKeyboardInput();
