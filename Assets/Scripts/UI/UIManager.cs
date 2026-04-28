@@ -23,18 +23,12 @@ namespace ProjectPowerSystemsEngineer.UI
         private CanvasGroup wipeBlockGroup;
 
         [Header("UI Containers - Build Menu")]
-        [Tooltip("底部的建造面板整体(用于动画滑动)")]
         public RectTransform buildPanel;
         private CanvasGroup buildPanelGroup;
-        [Tooltip("按钮们的父物体，挂载了 Layout Group 的那个对象")]
         public Transform buildButtonContainer;
-        [Tooltip("左下角工具栏的开关按钮图标 Image")]
         public Image imgToggleMenuIcon;
-        [Tooltip("Lucide 的 panel-bottom-open 图标 (菜单关闭时显示，暗示可以打开)")]
         public Sprite iconMenuOpen;
-        [Tooltip("Lucide 的 panel-bottom-close 图标 (菜单打开时显示，暗示可以关闭)")]
         public Sprite iconMenuClose;
-        [Tooltip("我们要动态生成的建造按钮预制体")]
         public GameObject buildButtonPrefab;
 
         [Header("Inspect Text & Icons")]
@@ -60,8 +54,9 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private bool isBuildMenuOpen = false;
         private Coroutine buildMenuAnimCoroutine;
-        private float buildPanelHiddenY = -150f; // 隐藏时在屏幕下方的 Y 坐标
-        private float buildPanelShownY = 20f;    // 显示时的 Y 坐标边距
+
+        private float buildPanelHiddenY;
+        private float buildPanelShownY;
 
         private void Start()
         {
@@ -71,7 +66,8 @@ namespace ProjectPowerSystemsEngineer.UI
             if (buildPanel != null)
             {
                 buildPanelGroup = buildPanel.GetComponent<CanvasGroup>();
-                // 初始化时让面板隐藏在屏幕下方
+                buildPanelShownY = buildPanel.anchoredPosition.y;
+                buildPanelHiddenY = buildPanelShownY - buildPanel.rect.height - 20f;
                 buildPanel.anchoredPosition = new Vector2(buildPanel.anchoredPosition.x, buildPanelHiddenY);
                 if (buildPanelGroup != null) SetCanvasGroupState(buildPanelGroup, 0f, false);
             }
@@ -80,7 +76,6 @@ namespace ProjectPowerSystemsEngineer.UI
             SetCanvasGroupState(topMarqueeGroup, 0f, false);
             if (wipeBlockGroup != null) SetCanvasGroupState(wipeBlockGroup, 0f, false);
 
-            // 【核心】游戏开始时，自动读取控制器数据，生成建造按钮
             GenerateBuildMenu();
         }
 
@@ -121,56 +116,36 @@ namespace ProjectPowerSystemsEngineer.UI
             }
         }
 
-        // ==================== 动态建造菜单系统 ====================
-
         private void GenerateBuildMenu()
         {
             if (builderController == null || builderController.availableComponents == null || buildButtonPrefab == null || buildButtonContainer == null) return;
 
-            // 清空容器内原本的测试占位符
             foreach (Transform child in buildButtonContainer) Destroy(child.gameObject);
 
             for (int i = 0; i < builderController.availableComponents.Length; i++)
             {
-                int capturedIndex = i; // C# 闭包陷阱：必须把 i 缓存到一个局部变量里供后续点击事件使用
+                int capturedIndex = i;
                 ComponentData data = builderController.availableComponents[i];
 
                 GameObject btnObj = Instantiate(buildButtonPrefab, buildButtonContainer);
 
-                // 设置数据：寻找预制体下的文字组件 (假设第一个是名字，第二个是花费)
-                TextMeshProUGUI[] texts = btnObj.GetComponentsInChildren<TextMeshProUGUI>();
-                if (texts.Length > 0) texts[0].text = data.componentName;
-                if (texts.Length > 1) texts[1].text = $"$ {data.buildCost}";
-
-                // 设置图标：寻找预制体下的 Image组件 (假设除了背景外的另一个Image是图标槽)
-                Image[] images = btnObj.GetComponentsInChildren<Image>();
-                foreach (var img in images)
+                // 【核心修改】通过新写的专用脚本进行精准数据绑定！
+                BuildMenuButton btnScript = btnObj.GetComponent<BuildMenuButton>();
+                if (btnScript != null)
                 {
-                    // 约定：我们在预制体里把装图标的 Image 命名为 "Icon"
-                    if (img.gameObject.name == "Icon" && data.uiIcon != null)
-                    {
-                        img.sprite = data.uiIcon;
-                    }
+                    btnScript.Setup(data, () => builderController.EnterBuildModeFromUI(capturedIndex));
                 }
-
-                // 绑定点击事件：点击后通知控制器
-                Button btn = btnObj.GetComponent<Button>();
-                if (btn != null)
+                else
                 {
-                    btn.onClick.AddListener(() =>
-                    {
-                        builderController.EnterBuildModeFromUI(capturedIndex);
-                    });
+                    Debug.LogError($"[UI系统] 你的 BuildButton 预制体上漏挂载了 BuildMenuButton 脚本！");
                 }
             }
         }
 
-        // 供左下角工具栏按钮调用
         public void ToggleBuildMenu()
         {
             isBuildMenuOpen = !isBuildMenuOpen;
 
-            // 切换工具栏图标
             if (imgToggleMenuIcon != null)
             {
                 imgToggleMenuIcon.sprite = isBuildMenuOpen ? iconMenuClose : iconMenuOpen;
@@ -202,7 +177,6 @@ namespace ProjectPowerSystemsEngineer.UI
             {
                 timer += Time.deltaTime;
                 float t = timer / duration;
-                // 使用极其丝滑的 EaseOut 曲线 (Deceleration)
                 t = 1f - Mathf.Pow(1f - t, 3);
 
                 buildPanel.anchoredPosition = new Vector2(buildPanel.anchoredPosition.x, Mathf.Lerp(startY, targetY, t));
@@ -222,8 +196,6 @@ namespace ProjectPowerSystemsEngineer.UI
                 }
             }
         }
-
-        // ==================== 检视面板与基础方法 ====================
 
         private void UpdateInspectPanel(PowerNode node)
         {
