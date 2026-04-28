@@ -16,6 +16,7 @@ MonoBehaviour:
   category: 0
   prefab: {fileID: 8823934284353489590, guid: 6bc8b580b39d4774b9b3a7a6afdb3ec5, type: 3}
   ghostPrefab: {fileID: 8823934284353489590, guid: 57f009b54ce0a0945acceeb6e5c44571, type: 3}
+  uiIcon: {fileID: 21300000, guid: eaf0ffe0172f27045b96b7f4b20f20a9, type: 3}
   buildCost: 100
   powerGeneration: 0
   powerConsumption: 0
