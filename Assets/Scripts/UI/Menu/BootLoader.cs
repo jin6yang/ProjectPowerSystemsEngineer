@@ -1,12 +1,16 @@
 using UnityEngine;
 using UnityEngine.Video;
 using UnityEngine.SceneManagement;
-using System.Collections; // 引入协程
+using UnityEngine.UI; // 引入UI命名空间
+using System.Collections;
 
 namespace ProjectPowerSystemsEngineer.Core
 {
     public class BootLoader : MonoBehaviour
     {
+        [Tooltip("淡出到黑屏的持续时间(秒)")]
+        public float fadeDuration = 0.6f;
+
         private VideoPlayer videoPlayer;
         private AsyncOperation asyncLoad;
 
@@ -14,7 +18,7 @@ namespace ProjectPowerSystemsEngineer.Core
         {
             videoPlayer = GetComponent<VideoPlayer>();
 
-            // 1. 游戏一启动，立刻在后台静默加载主菜单场景！
+            // 1. 游戏一启动，立刻在后台静默加载主菜单场景
             StartCoroutine(PreloadMainMenu());
 
             if (videoPlayer != null)
@@ -24,19 +28,17 @@ namespace ProjectPowerSystemsEngineer.Core
             }
             else
             {
-                ActivateMainMenu();
+                StartCoroutine(FadeOutAndActivate());
             }
         }
 
         private IEnumerator PreloadMainMenu()
         {
-            // 开始异步加载目标场景
             asyncLoad = SceneManager.LoadSceneAsync("MainMenuScene");
 
             if (asyncLoad != null)
             {
-                // 【核心魔法】阻止场景加载完毕后自动跳转！
-                // 这样它会静静地停留在 90% 的进度，等待我们发号施令
+                // 阻止场景加载完毕后自动跳转
                 asyncLoad.allowSceneActivation = false;
             }
 
@@ -45,20 +47,49 @@ namespace ProjectPowerSystemsEngineer.Core
 
         private void OnVideoFinished(VideoPlayer vp)
         {
-            // 视频播完了，是时候展现真正的技术了
-            ActivateMainMenu();
+            // 视频播完了，不直接切，而是先执行渐黑动画
+            StartCoroutine(FadeOutAndActivate());
         }
 
-        private void ActivateMainMenu()
+        private IEnumerator FadeOutAndActivate()
         {
+            // ==========================================
+            // 核心魔法：用代码动态生成一个全屏黑幕，无需你在Editor里配置！
+            // ==========================================
+            GameObject canvasObj = new GameObject("TransitionFadeCanvas");
+            Canvas canvas = canvasObj.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 9999; // 保证遮住所有东西
+
+            GameObject imgObj = new GameObject("FadeImage");
+            imgObj.transform.SetParent(canvasObj.transform, false);
+            Image fadeImage = imgObj.AddComponent<Image>();
+            fadeImage.color = new Color(0, 0, 0, 0); // 初始全透明
+
+            // 强制填满全屏
+            RectTransform rect = fadeImage.GetComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+
+            // 执行渐黑插值动画
+            float time = 0;
+            while (time < fadeDuration)
+            {
+                time += Time.deltaTime;
+                fadeImage.color = new Color(0, 0, 0, time / fadeDuration);
+                yield return null;
+            }
+            fadeImage.color = Color.black;
+
+            // 画面完全黑透后，瞬间释放场景跳转！
             if (asyncLoad != null)
             {
-                // 允许跳转！因为场景已经在后台加载好了，所以这一瞬间会丝滑切入，没有任何卡顿！
                 asyncLoad.allowSceneActivation = true;
             }
             else
             {
-                // 兜底防御
                 SceneManager.LoadScene("MainMenuScene");
             }
         }
