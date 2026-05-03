@@ -15,6 +15,7 @@ namespace ProjectPowerSystemsEngineer.UI
         public CanvasGroup panelMain;
         public CanvasGroup panelLevelSelect;
         public CanvasGroup panelLoading;
+        public CanvasGroup panelPowerMenu; // 新增：电源菜单面板
 
         [Header("Top Bar UI")]
         public TextMeshProUGUI txtSystemTime;
@@ -23,11 +24,18 @@ namespace ProjectPowerSystemsEngineer.UI
         public Button btnLogin;
         public Button btnStartGame;
 
+        [Header("Buttons - Power Menu")]
+        public Button btnPowerIcon;
+        public Button btnLogout;
+        public Button btnShutdown;
+        public Button btnClosePower;
+
         [Header("Level Select UI")]
         public Button btnBack;
         public TextMeshProUGUI txtLevelNameDisplay;
         public Button[] btnLevels;
 
+        // 场景名称配置
         private string[] levelNames = { "反应堆初始化测试", "高压电网搭建", "沙盒模式" };
         private string[] sceneNames = { "Level_DevTest_01", "Level_02", "Level_03" };
 
@@ -35,22 +43,31 @@ namespace ProjectPowerSystemsEngineer.UI
         public Image imgYellowBar;
         public TextMeshProUGUI txtLoadingPercent;
 
-        // 【新增】自动记录你在Editor里设置的进度条初始宽度
         private float initialBarWidth;
+        private bool isPowerMenuOpen = false;
 
         private void Start()
         {
+            // 初始状态强制设定
             SetCanvasGroupAlpha(panelSelectUser, 1f, true);
             SetCanvasGroupAlpha(panelMain, 0f, false);
             SetCanvasGroupAlpha(panelLevelSelect, 0f, false);
             SetCanvasGroupAlpha(panelLoading, 0f, false);
+            SetCanvasGroupAlpha(panelPowerMenu, 0f, false);
 
             if (btnLogin != null) btnLogin.onClick.AddListener(OnLoginClicked);
             if (btnStartGame != null) btnStartGame.onClick.AddListener(OnStartGameClicked);
             if (btnBack != null) btnBack.onClick.AddListener(OnBackClicked);
 
+            // 绑定电源菜单按钮
+            if (btnPowerIcon != null) btnPowerIcon.onClick.AddListener(OpenPowerMenu);
+            if (btnClosePower != null) btnClosePower.onClick.AddListener(ClosePowerMenu);
+            if (btnLogout != null) btnLogout.onClick.AddListener(OnLogoutClicked);
+            if (btnShutdown != null) btnShutdown.onClick.AddListener(OnShutdownClicked);
+
             if (OnyxController.Instance != null) OnyxController.Instance.SetState(OnyxState.Sleepy);
 
+            // 自动绑定关卡选择按钮的悬停事件
             for (int i = 0; i < btnLevels.Length; i++)
             {
                 int index = i;
@@ -65,7 +82,7 @@ namespace ProjectPowerSystemsEngineer.UI
 
             txtLevelNameDisplay.text = "请选择模拟项目";
 
-            // 【新增】在Start时读取并锁定你配置的UI宽度
+            // 锁定在Editor中设定的加载条宽度
             if (imgYellowBar != null)
             {
                 initialBarWidth = imgYellowBar.rectTransform.rect.width;
@@ -76,13 +93,62 @@ namespace ProjectPowerSystemsEngineer.UI
         {
             if (txtSystemTime != null) txtSystemTime.text = System.DateTime.Now.ToString("HH:mm");
 
+            // 监听 ESC 键 或 手柄 B 键
+            bool isCancelPressed = (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) ||
+                                   (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame);
+
+            if (isCancelPressed)
+            {
+                if (isPowerMenuOpen)
+                {
+                    ClosePowerMenu();
+                }
+                else if (panelLevelSelect.alpha > 0.5f)
+                {
+                    OnBackClicked(); // 在关卡选择界面按ESC可返回主菜单
+                }
+            }
+
+            // 开发者快捷通道：按 ~ 键进入测试关卡
             if (panelLevelSelect.alpha > 0.5f && Keyboard.current != null && Keyboard.current.backquoteKey.wasPressedThisFrame)
             {
-                Debug.Log("[System] 检测到开发者覆写指令，强制进入 DevTest_01...");
                 StartCoroutine(TransitionToLoadingAndLoad("Level_DevTest_01"));
             }
         }
 
+        // ==================== 电源菜单控制逻辑 ====================
+        private void OpenPowerMenu()
+        {
+            if (isPowerMenuOpen) return;
+            isPowerMenuOpen = true;
+            StartCoroutine(CrossFadePanels(null, panelPowerMenu));
+        }
+
+        private void ClosePowerMenu()
+        {
+            if (!isPowerMenuOpen) return;
+            isPowerMenuOpen = false;
+            StartCoroutine(CrossFadePanels(panelPowerMenu, null));
+        }
+
+        private void OnLogoutClicked()
+        {
+            ClosePowerMenu();
+            StartCoroutine(CrossFadePanels(panelMain, panelSelectUser, () => {
+                if (OnyxController.Instance != null) OnyxController.Instance.SetState(OnyxState.Sleepy);
+            }));
+        }
+
+        private void OnShutdownClicked()
+        {
+            Debug.Log("[System] 执行系统关机...");
+            Application.Quit();
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#endif
+        }
+
+        // ==================== 主菜单导航逻辑 ====================
         private void OnLoginClicked()
         {
             StartCoroutine(CrossFadePanels(panelSelectUser, panelMain, () => {
@@ -108,23 +174,28 @@ namespace ProjectPowerSystemsEngineer.UI
             }
         }
 
+        // 核心UI交叉淡入淡出 (支持传 null 以实现单边淡入/淡出)
         private IEnumerator CrossFadePanels(CanvasGroup fadeOut, CanvasGroup fadeIn, System.Action onComplete = null)
         {
-            fadeOut.interactable = false; fadeIn.interactable = false;
+            if (fadeOut != null) fadeOut.interactable = false;
+            if (fadeIn != null) fadeIn.interactable = false;
+
             float duration = 0.3f; float time = 0;
             while (time < duration)
             {
-                time += Time.deltaTime;
+                time += Time.unscaledDeltaTime;
                 float t = time / duration;
-                SetCanvasGroupAlpha(fadeOut, 1f - t, false);
-                SetCanvasGroupAlpha(fadeIn, t, false);
+                if (fadeOut != null) SetCanvasGroupAlpha(fadeOut, 1f - t, false);
+                if (fadeIn != null) SetCanvasGroupAlpha(fadeIn, t, false);
                 yield return null;
             }
-            SetCanvasGroupAlpha(fadeOut, 0f, false);
-            SetCanvasGroupAlpha(fadeIn, 1f, true);
+
+            if (fadeOut != null) SetCanvasGroupAlpha(fadeOut, 0f, false);
+            if (fadeIn != null) SetCanvasGroupAlpha(fadeIn, 1f, true);
             onComplete?.Invoke();
         }
 
+        // ==================== 终极解耦加载系统 ====================
         private IEnumerator TransitionToLoadingAndLoad(string targetScene)
         {
             yield return StartCoroutine(CrossFadePanels(panelLevelSelect, panelLoading));
@@ -132,7 +203,6 @@ namespace ProjectPowerSystemsEngineer.UI
 
             RectTransform barRect = imgYellowBar.GetComponent<RectTransform>();
 
-            // 使用你在 Editor 中设定的动态宽度 initialBarWidth，彻底解绑硬编码的 50f
             barRect.anchorMax = new Vector2(0f, 1f);
             barRect.anchorMin = new Vector2(0f, 1f);
             barRect.offsetMin = new Vector2(0f, 0f);
@@ -146,6 +216,7 @@ namespace ProjectPowerSystemsEngineer.UI
             float displayProgress = 0f;
             int phase = 0;
 
+            // 伪加载曲线节奏控制
             while (displayProgress < 1f)
             {
                 if (phase == 0)
@@ -173,13 +244,10 @@ namespace ProjectPowerSystemsEngineer.UI
                 }
 
                 barRect.anchorMin = new Vector2(0f, 1f - displayProgress);
-
-                // 再次使用 initialBarWidth
                 barRect.offsetMin = new Vector2(0f, 0f);
                 barRect.offsetMax = new Vector2(initialBarWidth, 0f);
 
                 txtLoadingPercent.text = Mathf.RoundToInt(displayProgress * 100).ToString("D3") + "%";
-
                 yield return null;
             }
 
@@ -195,7 +263,6 @@ namespace ProjectPowerSystemsEngineer.UI
                 barRect.anchorMax = new Vector2(easeT, 1f);
                 barRect.anchorMin = new Vector2(0f, 0f);
 
-                // 将宽度由 initialBarWidth 平滑归零
                 float currentWidth = Mathf.Lerp(initialBarWidth, 0f, easeT);
                 barRect.offsetMin = Vector2.zero;
                 barRect.offsetMax = new Vector2(currentWidth, 0f);
@@ -206,12 +273,7 @@ namespace ProjectPowerSystemsEngineer.UI
             barRect.anchorMax = Vector2.one;
             barRect.offsetMax = Vector2.zero;
 
-            // ==========================================
-            // 解耦核心：主菜单的任务到此为止，交接棒交给下一个场景的 SceneFadeIn.cs！
-            // 删除了原本那些跨越边界手捏 Canvas 的臃肿代码。
-            // ==========================================
-
-            // 瞬间放行场景跳转
+            // 解耦执行：交接棒给下一个场景里的 SceneFadeIn.cs
             asyncLoad.allowSceneActivation = true;
         }
 
