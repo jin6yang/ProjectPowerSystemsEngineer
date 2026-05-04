@@ -285,7 +285,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
+  m_BackGroundColor: {r: 0.101960786, g: 0.101960786, b: 0.101960786, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -349,7 +349,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 408586789}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: fbeb019c501e998449da16a7979c7fae, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: 0c2f9956f9100ba4eb941a3899ee9a57, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 408586791}
@@ -431,6 +431,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3c50dcc641c07864e96a5e7d071e1e12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Core.BootLoader
+  fadeDuration: 0.6
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
