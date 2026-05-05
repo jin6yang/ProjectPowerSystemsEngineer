@@ -94,7 +94,16 @@ namespace ProjectPowerSystemsEngineer.Systems
 
         private void HandleKeyboardInput()
         {
-            if (Keyboard.current.escapeKey.wasPressedThisFrame)
+            // 【修改】合并检测键盘 ESC 键和手柄 B 键
+            bool isCancelPressed = false;
+
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+                isCancelPressed = true;
+
+            if (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame)
+                isCancelPressed = true;
+
+            if (isCancelPressed)
             {
                 if (isBuildingMode)
                 {
