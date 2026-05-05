@@ -1197,6 +1197,7 @@ GameObject:
   - component: {fileID: 626925173}
   - component: {fileID: 626925172}
   - component: {fileID: 626925174}
+  - component: {fileID: 626925175}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -1286,7 +1287,7 @@ VideoPlayer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 626925168}
   m_Enabled: 1
-  m_VideoClip: {fileID: 32900000, guid: 9dd6ee7cc83622c46bc515dde941684a, type: 3}
+  m_VideoClip: {fileID: 32900000, guid: fa0c279680950c44785c77370ed19b79, type: 3}
   m_TargetCameraAlpha: 1
   m_TargetCamera3DLayout: 0
   m_TargetCamera: {fileID: 626925170}
@@ -1370,6 +1371,29 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.UI.SceneFadeIn
   fadeDuration: 0.6
   transitionColor: {r: 0, g: 0, b: 0, a: 1}
+--- !u!114 &626925175
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 626925168}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c807557232a17e541a906abbba2e7f56, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Core.AdaptiveVideoPlayer
+  videoProfiles:
+  - label: 16:9
+    targetRatio: {x: 16, y: 9}
+    videoClip: {fileID: 32900000, guid: fa0c279680950c44785c77370ed19b79, type: 3}
+  - label: 16:10
+    targetRatio: {x: 16, y: 10}
+    videoClip: {fileID: 32900000, guid: 9dd6ee7cc83622c46bc515dde941684a, type: 3}
+  - label: 21:9
+    targetRatio: {x: 21, y: 9}
+    videoClip: {fileID: 32900000, guid: bf07cb984ce3e7d4dab1ace6c7970195, type: 3}
+  cropToFillScreen: 1
 --- !u!1 &640432951
 GameObject:
   m_ObjectHideFlags: 0
