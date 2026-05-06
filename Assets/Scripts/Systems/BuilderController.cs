@@ -11,7 +11,8 @@ namespace ProjectPowerSystemsEngineer.Systems
 {
     public class BuilderController : MonoBehaviour
     {
-        [Header("Build Data (Hotbar)")]
+        // 【核心修改】隐藏配置面板。该数据现在由当前场景的 LevelManager 在 Awake 时动态注入！
+        [HideInInspector]
         public ComponentData[] availableComponents;
 
         [Header("Ghost Materials")]
@@ -29,7 +30,7 @@ namespace ProjectPowerSystemsEngineer.Systems
         public PowerNode SelectedNode { get; private set; }
         public Vector2Int? SelectedGridPosition { get; private set; }
 
-        public bool IsBuildingMode => isBuildingMode; // 【新增】公开建造状态供 UI 读取
+        public bool IsBuildingMode => isBuildingMode;
         private bool isBuildingMode = false;
         private int currentSelectedIndex = 0;
 
@@ -68,11 +69,8 @@ namespace ProjectPowerSystemsEngineer.Systems
 
         void Update()
         {
-            // 【核心防穿透逻辑】：如果鼠标指针悬停在任何 UI 元素上方 (比如在点击建造面板)
-            // 就直接跳过这部分点击检测，防止在 UI 下面的 3D 地面上意外建造
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             {
-                // 此时只允许 UI 层处理点击，3D 世界的鼠标检测全部免疫！
                 return;
             }
 
@@ -94,7 +92,6 @@ namespace ProjectPowerSystemsEngineer.Systems
 
         private void HandleKeyboardInput()
         {
-            // 【修改】合并检测键盘 ESC 键和手柄 B 键
             bool isCancelPressed = false;
 
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
@@ -117,15 +114,12 @@ namespace ProjectPowerSystemsEngineer.Systems
                 }
             }
 
-            // 【拆除与清理逻辑】仅在标准模式下生效
             if (!isBuildingMode && SelectedNode != null)
             {
-                // 1. 完全拆除节点 (Delete / Backspace)
                 if (Keyboard.current.deleteKey.wasPressedThisFrame || Keyboard.current.backspaceKey.wasPressedThisFrame)
                 {
                     DeleteSelectedNode();
                 }
-                // 2. 【新增】仅拆除依附的电线 (- 减号键)
                 else if (Keyboard.current.minusKey.wasPressedThisFrame || Keyboard.current.numpadMinusKey.wasPressedThisFrame)
                 {
                     DeleteAttachedCablesOnly();
@@ -336,14 +330,12 @@ namespace ProjectPowerSystemsEngineer.Systems
             return null;
         }
 
-        // 【新增】供 UI 按钮调用的专用公开方法
         public void EnterBuildModeFromUI(int index)
         {
             if (availableComponents == null || index < 0 || index >= availableComponents.Length) return;
 
             currentSelectedIndex = index;
 
-            // 如果还没进入建造模式，强制进入
             if (!isBuildingMode)
             {
                 isBuildingMode = true;
@@ -436,8 +428,6 @@ namespace ProjectPowerSystemsEngineer.Systems
             }
         }
 
-        // ==================== 智能拆除系统 ====================
-
         private void DeleteSelectedNode()
         {
             if (SelectedNode == null) return;
@@ -471,10 +461,8 @@ namespace ProjectPowerSystemsEngineer.Systems
             ExecuteDestruction(nodesToDestroy, allNodesInScene);
         }
 
-        // 【新增】单独一键拆除关联的所有电线
         private void DeleteAttachedCablesOnly()
         {
-            // 如果没选中东西，或者选中的本身就是电线，则不生效
             if (SelectedNode == null || SelectedNode.data.isPointToPointCable) return;
 
             Debug.Log($"<color=yellow>[系统] 快速剥离了连接至 {SelectedNode.data.componentName} 的所有电线</color>");
@@ -482,7 +470,6 @@ namespace ProjectPowerSystemsEngineer.Systems
             List<PowerNode> cablesToDestroy = new List<PowerNode>();
             PowerNode[] allNodesInScene = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
 
-            // 1. 寻找从该建筑连出去的电线
             foreach (var connectedNode in SelectedNode.OutgoingConnections)
             {
                 if (connectedNode != null && connectedNode.data.isPointToPointCable)
@@ -491,7 +478,6 @@ namespace ProjectPowerSystemsEngineer.Systems
                 }
             }
 
-            // 2. 寻找连入该建筑的电线
             foreach (var node in allNodesInScene)
             {
                 if (node != null && node.data.isPointToPointCable && node.OutgoingConnections.Contains(SelectedNode))
@@ -503,7 +489,6 @@ namespace ProjectPowerSystemsEngineer.Systems
             ExecuteDestruction(cablesToDestroy, allNodesInScene, keepSelected: true);
         }
 
-        // 将共用的销毁逻辑提取出来
         private void ExecuteDestruction(List<PowerNode> nodesToDestroy, PowerNode[] allNodesInScene, bool keepSelected = false)
         {
             foreach (var nodeToDestroy in nodesToDestroy)
