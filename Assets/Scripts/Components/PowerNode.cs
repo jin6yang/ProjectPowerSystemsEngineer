@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using ProjectPowerSystemsEngineer.Data;
 using ProjectPowerSystemsEngineer.Grid;
-using ProjectPowerSystemsEngineer.UI; // 【新增】引入 UI 命名空间以获取全局变量
+using ProjectPowerSystemsEngineer.UI;
 
 namespace ProjectPowerSystemsEngineer.Components
 {
@@ -47,11 +47,21 @@ namespace ProjectPowerSystemsEngineer.Components
                 lr.SetPosition(0, startPos);
                 lr.SetPosition(1, endPos);
             }
+
+            // 【新增核心机制】发电机直连保护判定
+            if (startNode != null && endNode != null &&
+                startNode.data.category == ComponentCategory.Generation &&
+                endNode.data.category == ComponentCategory.Generation)
+            {
+                // 触发并网短路保护！电线和两端的发电机全部锁死瘫痪！
+                this.TriggerProtection("并网冲突：发电机不可直连！");
+                startNode.TriggerProtection("并网短路！");
+                endNode.TriggerProtection("并网短路！");
+            }
         }
 
         public virtual void ReceivePower(float power, float stability)
         {
-            // 核心修复：多路电流汇合时，纯净度(稳定性)取最差的那一路
             if (CurrentPowerInput == 0) CurrentStability = stability;
             else CurrentStability = Mathf.Min(CurrentStability, stability);
 
@@ -70,31 +80,56 @@ namespace ProjectPowerSystemsEngineer.Components
             }
         }
 
-        protected virtual void TriggerProtection()
+        // 【修改】将可见性改为 public，并允许传入自定义错误原因
+        public virtual void TriggerProtection(string customReason = null)
         {
             IsProtectionTripped = true;
-            Debug.LogWarning($"[警报] {data.componentName} 过载！输入:{CurrentPowerInput}MW / 上限:{data.maxPowerCapacity}MW。已触发保护系统，切断输出！");
+            if (string.IsNullOrEmpty(customReason))
+            {
+                Debug.LogWarning($"[警报] {data.componentName} 过载！输入:{CurrentPowerInput}MW / 上限:{data.maxPowerCapacity}MW。已触发保护系统，切断输出！");
+            }
+            else
+            {
+                Debug.LogWarning($"[警报] {data.componentName} 触发保护: {customReason}");
+            }
         }
 
         // ==================== 动态缩放浮空 GUI ====================
         private void OnGUI()
         {
-            // 【核心修改】如果 UIManager 里的开关被关闭，直接跳过绘制，实现瞬间隐藏
             if (!UIManager.ShowFloatingUI || Camera.main == null || data == null) return;
 
-            Vector3 worldPos = transform.position + Vector3.up * 1.5f;
+            // 【核心修复】区分普通建筑和电线的坐标获取方式
+            Vector3 worldPos;
+            if (data.isPointToPointCable)
+            {
+                LineRenderer lr = GetComponent<LineRenderer>();
+                if (lr != null && lr.positionCount >= 2)
+                {
+                    // 电线的坐标取两端的中点，并且高度稍微降低一点以防止挡住建筑
+                    worldPos = (lr.GetPosition(0) + lr.GetPosition(1)) / 2f + Vector3.up * 0.5f;
+                }
+                else
+                {
+                    worldPos = transform.position + Vector3.up * 1.5f;
+                }
+            }
+            else
+            {
+                // 普通建筑取自身坐标正上方
+                worldPos = transform.position + Vector3.up * 1.5f;
+            }
+
             Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
 
+            // 只在物体位于摄像机前方时绘制
             if (screenPos.z > 0)
             {
                 screenPos.y = Screen.height - screenPos.y;
 
-                // 核心计算：计算摄像机与此建筑的物理距离，反比计算缩放倍率
                 float distance = Vector3.Distance(Camera.main.transform.position, worldPos);
-                // 15f 是我们设定的理想视觉基准距离
                 float scaleFactor = 15f / Mathf.Max(distance, 1f);
 
-                // 动态计算字体大小，并限制最小和最大值防止穿模
                 int dynamicFontSize = Mathf.RoundToInt(14 * scaleFactor);
                 dynamicFontSize = Mathf.Clamp(dynamicFontSize, 8, 32);
 
@@ -124,20 +159,18 @@ namespace ProjectPowerSystemsEngineer.Components
 
                 string displayText = $"{statusText}{data.componentName}\n{CurrentPowerInput} MW | S:{CurrentStability}";
 
-                // 动态调整背景矩形框的大小，以适应大号字体
                 float rectWidth = 150 * scaleFactor;
                 float rectHeight = 80 * scaleFactor;
-                // 给框体一个下限，防止拉得太远缩没了
                 rectWidth = Mathf.Max(rectWidth, 100);
                 rectHeight = Mathf.Max(rectHeight, 50);
 
                 Rect rect = new Rect(screenPos.x - rectWidth / 2, screenPos.y - rectHeight / 2, rectWidth, rectHeight);
 
-                // 画个纯黑底影，防强光看不清
+                // 黑底投影
                 style.normal.textColor = Color.black;
                 GUI.Label(new Rect(rect.x + 2, rect.y + 2, rect.width, rect.height), displayText, style);
 
-                // 画带颜色的本体
+                // 带色本体
                 style.normal.textColor = textColor;
                 GUI.Label(rect, displayText, style);
             }
