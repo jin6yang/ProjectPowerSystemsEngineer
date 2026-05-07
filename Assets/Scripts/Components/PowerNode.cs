@@ -48,8 +48,9 @@ namespace ProjectPowerSystemsEngineer.Components
                 lr.SetPosition(1, endPos);
             }
 
-            // 【新增核心机制】发电机直连保护判定
+            // 【新增核心机制】发电机直连保护判定 (已加入 null 防御)
             if (startNode != null && endNode != null &&
+                startNode.data != null && endNode.data != null &&
                 startNode.data.category == ComponentCategory.Generation &&
                 endNode.data.category == ComponentCategory.Generation)
             {
@@ -66,31 +67,36 @@ namespace ProjectPowerSystemsEngineer.Components
             else CurrentStability = Mathf.Min(CurrentStability, stability);
 
             CurrentPowerInput = power;
-
             CheckOverload();
         }
 
         protected virtual void CheckOverload()
         {
             if (data == null) return;
-
             if (CurrentPowerInput > data.maxPowerCapacity && !IsProtectionTripped)
             {
                 TriggerProtection();
             }
         }
 
-        // 【修改】将可见性改为 public，并允许传入自定义错误原因
-        public virtual void TriggerProtection(string customReason = null)
+        // 基础保护触发
+        public virtual void TriggerProtection()
+        {
+            TriggerProtection(null);
+        }
+
+        // 带原因的保护触发
+        public virtual void TriggerProtection(string customReason)
         {
             IsProtectionTripped = true;
             if (string.IsNullOrEmpty(customReason))
             {
-                Debug.LogWarning($"[警报] {data.componentName} 过载！输入:{CurrentPowerInput}MW / 上限:{data.maxPowerCapacity}MW。已触发保护系统，切断输出！");
+                // 使用 ?. 防止残影没有 data 时报错
+                Debug.LogWarning($"[警报] {data?.componentName} 过载！输入:{CurrentPowerInput}MW。已切断输出！");
             }
             else
             {
-                Debug.LogWarning($"[警报] {data.componentName} 触发保护: {customReason}");
+                Debug.LogWarning($"[警报] {data?.componentName} 触发保护: {customReason}");
             }
         }
 
@@ -122,7 +128,6 @@ namespace ProjectPowerSystemsEngineer.Components
 
             Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
 
-            // 只在物体位于摄像机前方时绘制
             if (screenPos.z > 0)
             {
                 screenPos.y = Screen.height - screenPos.y;
@@ -159,18 +164,14 @@ namespace ProjectPowerSystemsEngineer.Components
 
                 string displayText = $"{statusText}{data.componentName}\n{CurrentPowerInput} MW | S:{CurrentStability}";
 
-                float rectWidth = 150 * scaleFactor;
-                float rectHeight = 80 * scaleFactor;
-                rectWidth = Mathf.Max(rectWidth, 100);
-                rectHeight = Mathf.Max(rectHeight, 50);
+                float rectWidth = Mathf.Max(150 * scaleFactor, 100);
+                float rectHeight = Mathf.Max(80 * scaleFactor, 50);
 
                 Rect rect = new Rect(screenPos.x - rectWidth / 2, screenPos.y - rectHeight / 2, rectWidth, rectHeight);
 
-                // 黑底投影
                 style.normal.textColor = Color.black;
                 GUI.Label(new Rect(rect.x + 2, rect.y + 2, rect.width, rect.height), displayText, style);
 
-                // 带色本体
                 style.normal.textColor = textColor;
                 GUI.Label(rect, displayText, style);
             }
@@ -178,7 +179,7 @@ namespace ProjectPowerSystemsEngineer.Components
 
         public virtual float GetPowerOutput()
         {
-            if (IsProtectionTripped) return 0f;
+            if (IsProtectionTripped || data == null) return 0f;
 
             if (data.category == ComponentCategory.Generation)
             {
@@ -190,7 +191,7 @@ namespace ProjectPowerSystemsEngineer.Components
 
         public virtual float GetStabilityOutput()
         {
-            if (IsProtectionTripped) return 0f;
+            if (IsProtectionTripped || data == null) return 0f;
             return Mathf.Clamp(CurrentStability + data.stabilityModifier, 0f, 10f);
         }
     }
