@@ -11,7 +11,6 @@ namespace ProjectPowerSystemsEngineer.Systems
 {
     public class BuilderController : MonoBehaviour
     {
-        // 【核心修改】隐藏配置面板。该数据现在由当前场景的 LevelManager 在 Awake 时动态注入！
         [HideInInspector]
         public ComponentData[] availableComponents;
 
@@ -20,13 +19,11 @@ namespace ProjectPowerSystemsEngineer.Systems
         public Material invalidGhostMaterial;
 
         [Header("UI & Feedback")]
-        [Tooltip("地块选中时的四角指示器预制体")]
         public GameObject selectionIndicatorPrefab;
 
         [Header("Interaction Settings")]
         public float dragThreshold = 10f;
 
-        // --- 核心交互状态 ---
         public PowerNode SelectedNode { get; private set; }
         public Vector2Int? SelectedGridPosition { get; private set; }
 
@@ -41,7 +38,6 @@ namespace ProjectPowerSystemsEngineer.Systems
         private Vector2 mouseDownPosition;
         private bool isDragging = false;
 
-        // --- 电缆连线专用状态 ---
         private PowerNode cableStartNode = null;
         private LineRenderer previewLine;
 
@@ -391,12 +387,20 @@ namespace ProjectPowerSystemsEngineer.Systems
         {
             if (SelectedComponent.prefab == null) return;
             GameObject newObj = Instantiate(SelectedComponent.prefab, worldPos, Quaternion.identity);
+
             PowerNode node = newObj.GetComponent<PowerNode>();
+
+            // 【核心防呆机制】如果在预制体上找不到 PowerNode，立刻报警！
             if (node != null)
             {
                 node.data = SelectedComponent;
                 node.Initialize(pos);
             }
+            else
+            {
+                Debug.LogError($"<color=red>[严重警告]</color> 预制体 <b>{SelectedComponent.prefab.name}</b> 上没有挂载 PowerNode 脚本！它将变成一个无法交互、无法供电的死物体！请双击该预制体并添加组件。");
+            }
+
             GridCell cell = GridManager.Instance.GetCell(pos);
             if (cell != null) cell.PlacedObject = newObj;
 
@@ -425,6 +429,10 @@ namespace ProjectPowerSystemsEngineer.Systems
                 }
 
                 PowerSimulationSystem.Instance?.RecalculatePowerGrid();
+            }
+            else
+            {
+                Debug.LogError($"<color=red>[严重警告]</color> 电线预制体 <b>{SelectedComponent.prefab.name}</b> 上没有挂载 PowerNode 脚本！连接失败！");
             }
         }
 
