@@ -19,6 +19,27 @@ namespace ProjectPowerSystemsEngineer.Components
 
         public List<PowerNode> OutgoingConnections { get; private set; } = new List<PowerNode>();
 
+        // 【新增】自动检测是否是关卡预置建筑
+        private void Start()
+        {
+            // 如果游戏开始时，它是普通建筑且存在于网格系统中
+            if (GridManager.Instance != null && data != null && !data.isPointToPointCable)
+            {
+                // 获取自身所在的网格坐标
+                Vector2Int pos = GridManager.Instance.WorldToGridPosition(transform.position);
+                GridCell cell = GridManager.Instance.GetCell(pos);
+
+                // 如果这个格子还没被别人占领，自动占据！(用于处理你在编辑器里手动摆放的建筑)
+                if (cell != null && cell.PlacedObject == null)
+                {
+                    cell.PlacedObject = this.gameObject;
+                    Initialize(pos);
+                    // 自动吸附对齐到网格中心，方便你在编辑器里随便摆，运行会自动对齐！
+                    transform.position = GridManager.Instance.GridToWorldPosition(pos);
+                }
+            }
+        }
+
         public virtual void Initialize(Vector2Int pos)
         {
             GridPosition = pos;
