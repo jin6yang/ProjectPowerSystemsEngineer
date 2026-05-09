@@ -24,6 +24,10 @@ namespace ProjectPowerSystemsEngineer.Systems
         [Header("Interaction Settings")]
         public float dragThreshold = 10f;
 
+        // 【新增】定义哪些 Layer 会阻挡电线穿透（比如你的高墙 Layer）
+        [Tooltip("设置会阻挡电线的物理层级 (例如 Obstacle)")]
+        public LayerMask cableObstacleLayer;
+
         public PowerNode SelectedNode { get; private set; }
         public Vector2Int? SelectedGridPosition { get; private set; }
 
@@ -40,6 +44,9 @@ namespace ProjectPowerSystemsEngineer.Systems
 
         private PowerNode cableStartNode = null;
         private LineRenderer previewLine;
+
+        // 记录当前电线路径是否畅通
+        private bool isCablePathValid = true;
 
         public ComponentData SelectedComponent =>
             (availableComponents != null && availableComponents.Length > 0 && currentSelectedIndex < availableComponents.Length)
@@ -65,11 +72,7 @@ namespace ProjectPowerSystemsEngineer.Systems
 
         void Update()
         {
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            {
-                return;
-            }
-
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
             if (Keyboard.current == null || Mouse.current == null) return;
 
             HandleKeyboardInput();
@@ -90,11 +93,8 @@ namespace ProjectPowerSystemsEngineer.Systems
         {
             bool isCancelPressed = false;
 
-            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-                isCancelPressed = true;
-
-            if (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame)
-                isCancelPressed = true;
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) isCancelPressed = true;
+            if (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame) isCancelPressed = true;
 
             if (isCancelPressed)
             {
@@ -106,20 +106,13 @@ namespace ProjectPowerSystemsEngineer.Systems
                 else if (SelectedGridPosition.HasValue || SelectedNode != null)
                 {
                     ClearSelection();
-                    Debug.Log("[系统] 取消选中目标/地块");
                 }
             }
 
             if (!isBuildingMode && SelectedNode != null)
             {
-                if (Keyboard.current.deleteKey.wasPressedThisFrame || Keyboard.current.backspaceKey.wasPressedThisFrame)
-                {
-                    DeleteSelectedNode();
-                }
-                else if (Keyboard.current.minusKey.wasPressedThisFrame || Keyboard.current.numpadMinusKey.wasPressedThisFrame)
-                {
-                    DeleteAttachedCablesOnly();
-                }
+                if (Keyboard.current.deleteKey.wasPressedThisFrame || Keyboard.current.backspaceKey.wasPressedThisFrame) DeleteSelectedNode();
+                else if (Keyboard.current.minusKey.wasPressedThisFrame || Keyboard.current.numpadMinusKey.wasPressedThisFrame) DeleteAttachedCablesOnly();
             }
 
             if (Keyboard.current.bKey.wasPressedThisFrame) ToggleBuildMode();
@@ -134,7 +127,6 @@ namespace ProjectPowerSystemsEngineer.Systems
             if (newIndex < availableComponents.Length && newIndex != currentSelectedIndex)
             {
                 currentSelectedIndex = newIndex;
-                Debug.Log($"[Builder] 切换至工具: {SelectedComponent.componentName}");
                 CancelCablePlacement();
                 if (isBuildingMode) RefreshGhost();
             }
@@ -155,6 +147,20 @@ namespace ProjectPowerSystemsEngineer.Systems
             }
         }
 
+        // 【新增】核心射线检测逻辑，判断两点之间的半空中是否有物理高墙遮挡
+        private bool CheckCablePathClear(Vector3 start, Vector3 end)
+        {
+            Vector3 direction = end - start;
+            float distance = direction.magnitude;
+
+            // 发射一条从起点到终点的射线，只检测 cableObstacleLayer 指定的层级
+            if (Physics.Raycast(start, direction.normalized, distance, cableObstacleLayer))
+            {
+                return false; // 撞到高墙障碍物，路径被阻挡！
+            }
+            return true; // 畅通无阻
+        }
+
         private void ProcessLeftClick()
         {
             Ray ray = Camera.main.ScreenPointToRay(Mouse.current.position.ReadValue());
@@ -169,7 +175,7 @@ namespace ProjectPowerSystemsEngineer.Systems
             if (clickedNode == null && gridPos.HasValue)
             {
                 GridCell cell = GridManager.Instance.GetCell(gridPos.Value);
-                if (cell != null && cell.IsOccupied)
+                if (cell != null && cell.IsOccupied && cell.PlacedObject != null)
                 {
                     clickedNode = cell.PlacedObject.GetComponent<PowerNode>();
                 }
@@ -179,16 +185,6 @@ namespace ProjectPowerSystemsEngineer.Systems
             {
                 SelectedNode = clickedNode;
                 SelectedGridPosition = gridPos;
-
-                if (SelectedNode != null)
-                {
-                    Debug.Log($"<color=cyan>[交互] 选中设施: {SelectedNode.data.componentName}</color>");
-                }
-                else if (SelectedGridPosition.HasValue)
-                {
-                    Debug.Log($"<color=cyan>[交互] 选中空地块: {SelectedGridPosition.Value}</color>");
-                }
-
                 UpdateSelectionIndicator();
             }
             else
@@ -207,8 +203,16 @@ namespace ProjectPowerSystemsEngineer.Systems
                             }
                             else if (cableStartNode != clickedNode)
                             {
-                                CreateCableConnection(cableStartNode, clickedNode);
-                                CancelCablePlacement();
+                                // 【拦截】只有当路径畅通时，才允许建立连接！
+                                if (isCablePathValid)
+                                {
+                                    CreateCableConnection(cableStartNode, clickedNode);
+                                    CancelCablePlacement();
+                                }
+                                else
+                                {
+                                    Debug.LogWarning("[系统] 电线被障碍物阻挡，无法连接！请绕道！");
+                                }
                             }
                         }
                     }
@@ -239,7 +243,7 @@ namespace ProjectPowerSystemsEngineer.Systems
         {
             if (indicatorInstance == null) return;
 
-            if (SelectedNode != null && SelectedNode.data.isPointToPointCable)
+            if (SelectedNode != null && SelectedNode.data != null && SelectedNode.data.isPointToPointCable)
             {
                 indicatorInstance.SetActive(false);
                 return;
@@ -269,17 +273,22 @@ namespace ProjectPowerSystemsEngineer.Systems
                 {
                     previewLine.enabled = true;
                     Vector3 startPos = cableStartNode.transform.position + Vector3.up * 1f;
-
                     Vector3 endPos;
+
                     PowerNode hoveredNode = GetHoveredNode();
                     if (hoveredNode != null) endPos = hoveredNode.transform.position + Vector3.up * 1f;
                     else
                     {
                         Vector2Int? gPos = GridManager.Instance.GetMouseGridPosition();
-                        endPos = gPos.HasValue ? GridManager.Instance.GridToWorldPosition(gPos.Value) : startPos;
+                        endPos = gPos.HasValue ? GridManager.Instance.GridToWorldPosition(gPos.Value) + Vector3.up * 1f : startPos;
                     }
+
                     previewLine.SetPosition(0, startPos);
                     previewLine.SetPosition(1, endPos);
+
+                    // 【视线检测】实时更新预览线的颜色
+                    isCablePathValid = CheckCablePathClear(startPos, endPos);
+                    previewLine.material = isCablePathValid ? validGhostMaterial : invalidGhostMaterial;
                 }
                 else previewLine.enabled = false;
             }
@@ -321,7 +330,7 @@ namespace ProjectPowerSystemsEngineer.Systems
             if (gridPos.HasValue)
             {
                 GridCell cell = GridManager.Instance.GetCell(gridPos.Value);
-                if (cell != null && cell.IsOccupied) return cell.PlacedObject.GetComponent<PowerNode>();
+                if (cell != null && cell.IsOccupied && cell.PlacedObject != null) return cell.PlacedObject.GetComponent<PowerNode>();
             }
             return null;
         }
@@ -329,38 +338,26 @@ namespace ProjectPowerSystemsEngineer.Systems
         public void EnterBuildModeFromUI(int index)
         {
             if (availableComponents == null || index < 0 || index >= availableComponents.Length) return;
-
             currentSelectedIndex = index;
-
-            if (!isBuildingMode)
-            {
-                isBuildingMode = true;
-                Debug.Log(">>> UI 触发：进入建造模式！");
-            }
-
+            if (!isBuildingMode) isBuildingMode = true;
             ClearSelection();
             RefreshGhost();
             CancelCablePlacement();
-
-            Debug.Log($"[Builder] UI选中并准备建造: {SelectedComponent.componentName}");
         }
 
         private void ToggleBuildMode()
         {
             if (SelectedComponent == null) return;
             isBuildingMode = !isBuildingMode;
-
             if (isBuildingMode)
             {
                 ClearSelection();
                 RefreshGhost();
-                Debug.Log($">>> 进入建造模式！(工具:{SelectedComponent.componentName})");
             }
             else
             {
                 if (ghostInstance != null) Destroy(ghostInstance);
                 CancelCablePlacement();
-                Debug.Log("<<< 退出建造模式");
             }
         }
 
@@ -387,30 +384,20 @@ namespace ProjectPowerSystemsEngineer.Systems
         {
             if (SelectedComponent.prefab == null) return;
             GameObject newObj = Instantiate(SelectedComponent.prefab, worldPos, Quaternion.identity);
-
             PowerNode node = newObj.GetComponent<PowerNode>();
-
-            // 【核心防呆机制】如果在预制体上找不到 PowerNode，立刻报警！
             if (node != null)
             {
                 node.data = SelectedComponent;
                 node.Initialize(pos);
             }
-            else
-            {
-                Debug.LogError($"<color=red>[严重警告]</color> 预制体 <b>{SelectedComponent.prefab.name}</b> 上没有挂载 PowerNode 脚本！它将变成一个无法交互、无法供电的死物体！请双击该预制体并添加组件。");
-            }
-
             GridCell cell = GridManager.Instance.GetCell(pos);
             if (cell != null) cell.PlacedObject = newObj;
-
             PowerSimulationSystem.Instance?.RecalculatePowerGrid();
         }
 
         private void CreateCableConnection(PowerNode start, PowerNode end)
         {
             if (SelectedComponent.prefab == null) return;
-
             GameObject cableObj = Instantiate(SelectedComponent.prefab, Vector3.zero, Quaternion.identity);
             PowerNode cableNode = cableObj.GetComponent<PowerNode>();
 
@@ -427,73 +414,57 @@ namespace ProjectPowerSystemsEngineer.Systems
                     lr.BakeMesh(mesh, Camera.main, true);
                     mc.sharedMesh = mesh;
                 }
-
                 PowerSimulationSystem.Instance?.RecalculatePowerGrid();
-            }
-            else
-            {
-                Debug.LogError($"<color=red>[严重警告]</color> 电线预制体 <b>{SelectedComponent.prefab.name}</b> 上没有挂载 PowerNode 脚本！连接失败！");
             }
         }
 
         private void DeleteSelectedNode()
         {
             if (SelectedNode == null) return;
-
-            Debug.Log($"<color=red>[系统] 拆除了设施: {SelectedNode.data.componentName}</color>");
-
             List<PowerNode> nodesToDestroy = new List<PowerNode>();
             nodesToDestroy.Add(SelectedNode);
-
             PowerNode[] allNodesInScene = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
 
             if (!SelectedNode.data.isPointToPointCable)
             {
                 foreach (var connectedNode in SelectedNode.OutgoingConnections)
                 {
-                    if (connectedNode != null && connectedNode.data.isPointToPointCable)
+                    if (connectedNode != null && connectedNode.data != null && connectedNode.data.isPointToPointCable)
                     {
                         if (!nodesToDestroy.Contains(connectedNode)) nodesToDestroy.Add(connectedNode);
                     }
                 }
-
                 foreach (var node in allNodesInScene)
                 {
-                    if (node != null && node.data.isPointToPointCable && node.OutgoingConnections.Contains(SelectedNode))
+                    if (node != null && node.data != null && node.data.isPointToPointCable && node.OutgoingConnections.Contains(SelectedNode))
                     {
                         if (!nodesToDestroy.Contains(node)) nodesToDestroy.Add(node);
                     }
                 }
             }
-
             ExecuteDestruction(nodesToDestroy, allNodesInScene);
         }
 
         private void DeleteAttachedCablesOnly()
         {
             if (SelectedNode == null || SelectedNode.data.isPointToPointCable) return;
-
-            Debug.Log($"<color=yellow>[系统] 快速剥离了连接至 {SelectedNode.data.componentName} 的所有电线</color>");
-
             List<PowerNode> cablesToDestroy = new List<PowerNode>();
             PowerNode[] allNodesInScene = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
 
             foreach (var connectedNode in SelectedNode.OutgoingConnections)
             {
-                if (connectedNode != null && connectedNode.data.isPointToPointCable)
+                if (connectedNode != null && connectedNode.data != null && connectedNode.data.isPointToPointCable)
                 {
                     if (!cablesToDestroy.Contains(connectedNode)) cablesToDestroy.Add(connectedNode);
                 }
             }
-
             foreach (var node in allNodesInScene)
             {
-                if (node != null && node.data.isPointToPointCable && node.OutgoingConnections.Contains(SelectedNode))
+                if (node != null && node.data != null && node.data.isPointToPointCable && node.OutgoingConnections.Contains(SelectedNode))
                 {
                     if (!cablesToDestroy.Contains(node)) cablesToDestroy.Add(node);
                 }
             }
-
             ExecuteDestruction(cablesToDestroy, allNodesInScene, keepSelected: true);
         }
 
@@ -501,34 +472,19 @@ namespace ProjectPowerSystemsEngineer.Systems
         {
             foreach (var nodeToDestroy in nodesToDestroy)
             {
-                if (!nodeToDestroy.data.isPointToPointCable)
+                if (nodeToDestroy.data != null && !nodeToDestroy.data.isPointToPointCable)
                 {
                     GridCell cell = GridManager.Instance.GetCell(nodeToDestroy.GridPosition);
-                    if (cell != null && cell.PlacedObject == nodeToDestroy.gameObject)
-                    {
-                        cell.PlacedObject = null;
-                    }
+                    if (cell != null && cell.PlacedObject == nodeToDestroy.gameObject) cell.PlacedObject = null;
                 }
 
                 foreach (var node in allNodesInScene)
                 {
-                    if (node != null && node.OutgoingConnections.Contains(nodeToDestroy))
-                    {
-                        node.OutgoingConnections.Remove(nodeToDestroy);
-                    }
+                    if (node != null && node.OutgoingConnections.Contains(nodeToDestroy)) node.OutgoingConnections.Remove(nodeToDestroy);
                 }
-
-                if (nodeToDestroy != null && nodeToDestroy.gameObject != null)
-                {
-                    Destroy(nodeToDestroy.gameObject);
-                }
+                if (nodeToDestroy != null && nodeToDestroy.gameObject != null) Destroy(nodeToDestroy.gameObject);
             }
-
-            if (!keepSelected)
-            {
-                ClearSelection();
-            }
-
+            if (!keepSelected) ClearSelection();
             PowerSimulationSystem.Instance?.RecalculatePowerGrid();
         }
     }
