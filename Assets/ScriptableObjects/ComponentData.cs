@@ -49,8 +49,18 @@ namespace ProjectPowerSystemsEngineer.Data
         public float stabilityModifier = 0f;
 
         [Tooltip("设备运作所需的最低稳定度要求 (仅终端类有效，如 AI 服务器要求 8 以上)")]
-        [Range(0f, 10f)] // 依据新GDD，稳定度数值范围调整为 1-10 (此处最低设为0表示无要求)
+        [Range(0f, 10f)]
         public float requiredStability = 0f;
+
+        // ==========================================
+        // 【新增】储能类专属属性 (Storage Attributes)
+        // ==========================================
+        [Header("Storage Attributes (C)")]
+        [Tooltip("储能建筑充能所需的时间 (秒)。满足后才能发挥稳定度加成并储能。")]
+        public float chargeTime = 2f;
+
+        [Tooltip("储能建筑断网后，能维持反向供电及稳定度加成的时间 (秒)。")]
+        public float dischargeTime = 4f;
 
         [Header("Grid Rules")]
         [Tooltip("是否允许其他物体在此地块上穿行或重叠 (普通建筑通常为 false)")]
