@@ -211,7 +211,7 @@ namespace ProjectPowerSystemsEngineer.Systems
                                 }
                                 else
                                 {
-                                    Debug.LogWarning("[系统] 电线被障碍物阻挡，无法连接！请绕道！");
+                                    Debug.LogWarning("[系统] 电线连接失败：距离超出最大限制，或被物理障碍物阻挡视线！");
                                 }
                             }
                         }
@@ -275,11 +275,19 @@ namespace ProjectPowerSystemsEngineer.Systems
                     Vector3 startPos = cableStartNode.transform.position + Vector3.up * 1f;
                     Vector3 endPos;
 
+                    Vector2Int startGridPos = cableStartNode.GridPosition;
+                    Vector2Int targetGridPos = startGridPos;
+
                     PowerNode hoveredNode = GetHoveredNode();
-                    if (hoveredNode != null) endPos = hoveredNode.transform.position + Vector3.up * 1f;
+                    if (hoveredNode != null)
+                    {
+                        endPos = hoveredNode.transform.position + Vector3.up * 1f;
+                        targetGridPos = hoveredNode.GridPosition;
+                    }
                     else
                     {
                         Vector2Int? gPos = GridManager.Instance.GetMouseGridPosition();
+                        if (gPos.HasValue) targetGridPos = gPos.Value;
                         endPos = gPos.HasValue ? GridManager.Instance.GridToWorldPosition(gPos.Value) + Vector3.up * 1f : startPos;
                     }
 
@@ -288,6 +296,17 @@ namespace ProjectPowerSystemsEngineer.Systems
 
                     // 【视线检测】实时更新预览线的颜色
                     isCablePathValid = CheckCablePathClear(startPos, endPos);
+
+                    // 【新增：最大长度检测】使用切比雪夫距离(包含对角线)
+                    if (SelectedComponent.maxCableLength > 0)
+                    {
+                        int distance = Mathf.Max(Mathf.Abs(startGridPos.x - targetGridPos.x), Mathf.Abs(startGridPos.y - targetGridPos.y));
+                        if (distance > SelectedComponent.maxCableLength)
+                        {
+                            isCablePathValid = false;
+                        }
+                    }
+
                     previewLine.material = isCablePathValid ? validGhostMaterial : invalidGhostMaterial;
                 }
                 else previewLine.enabled = false;
