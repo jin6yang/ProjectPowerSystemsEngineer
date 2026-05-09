@@ -58,5 +58,8 @@ namespace ProjectPowerSystemsEngineer.Data
 
         [Tooltip("【核心机制】勾选此项，表示该组件是电缆或连线，必须通过先后点击起点和终点来建造")]
         public bool isPointToPointCable = false;
+
+        [Tooltip("电线的最大连接距离（网格数，包括边角）。填 0 表示无限长！")]
+        public int maxCableLength = 4;
     }
 }
