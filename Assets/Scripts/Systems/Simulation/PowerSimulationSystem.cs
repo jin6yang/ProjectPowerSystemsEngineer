@@ -20,7 +20,6 @@ namespace ProjectPowerSystemsEngineer.Simulation
         {
             PowerNode[] rawNodes = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
 
-            // 过滤掉所有没有数据的游离节点（比如充当鼠标残影的 Ghost 物体）
             List<PowerNode> allNodes = new List<PowerNode>();
             foreach (var node in rawNodes)
             {
@@ -34,6 +33,9 @@ namespace ProjectPowerSystemsEngineer.Simulation
             foreach (var node in allNodes)
             {
                 node.ReceivePower(0f, 10f);
+
+                // 【核心新增】每次重新计算前，重置该节点的外部受电状态
+                node.IsReceivingExternalPower = false;
                 inDegrees[node] = 0;
             }
 
@@ -55,8 +57,6 @@ namespace ProjectPowerSystemsEngineer.Simulation
                 {
                     if (node.data.category == ComponentCategory.Generation)
                     {
-                        // 【硬核修正】发电机产生的初始稳定度，取决于它的自身属性 (Stability Modifier)
-                        // 不再是无脑完美的 10 稳定度！
                         float baseStability = node.data.stabilityModifier;
                         node.ReceivePower(node.data.powerGeneration, baseStability);
                     }
@@ -79,6 +79,9 @@ namespace ProjectPowerSystemsEngineer.Simulation
 
                     foreach (var target in current.OutgoingConnections)
                     {
+                        // 【核心新增】如果上游有电传过来，明确标记它正在接收外部供电！
+                        target.IsReceivingExternalPower = true;
+
                         target.ReceivePower(target.CurrentPowerInput + powerPerPath, outStability);
 
                         if (inDegrees.ContainsKey(target))
