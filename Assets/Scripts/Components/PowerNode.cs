@@ -19,22 +19,19 @@ namespace ProjectPowerSystemsEngineer.Components
 
         public List<PowerNode> OutgoingConnections { get; private set; } = new List<PowerNode>();
 
-        // 【新增】自动检测是否是关卡预置建筑
+        // 【新增机制】游戏启动时，作为预置障碍物或终端，自动占领网格
         private void Start()
         {
-            // 如果游戏开始时，它是普通建筑且存在于网格系统中
             if (GridManager.Instance != null && data != null && !data.isPointToPointCable)
             {
-                // 获取自身所在的网格坐标
                 Vector2Int pos = GridManager.Instance.WorldToGridPosition(transform.position);
                 GridCell cell = GridManager.Instance.GetCell(pos);
 
-                // 如果这个格子还没被别人占领，自动占据！(用于处理你在编辑器里手动摆放的建筑)
                 if (cell != null && cell.PlacedObject == null)
                 {
                     cell.PlacedObject = this.gameObject;
                     Initialize(pos);
-                    // 自动吸附对齐到网格中心，方便你在编辑器里随便摆，运行会自动对齐！
+                    // 自动吸附对齐到网格中心
                     transform.position = GridManager.Instance.GridToWorldPosition(pos);
                 }
             }
@@ -69,13 +66,12 @@ namespace ProjectPowerSystemsEngineer.Components
                 lr.SetPosition(1, endPos);
             }
 
-            // 【新增核心机制】发电机直连保护判定 (已加入 null 防御)
+            // 【机制】发电机直连保护判定
             if (startNode != null && endNode != null &&
                 startNode.data != null && endNode.data != null &&
                 startNode.data.category == ComponentCategory.Generation &&
                 endNode.data.category == ComponentCategory.Generation)
             {
-                // 触发并网短路保护！电线和两端的发电机全部锁死瘫痪！
                 this.TriggerProtection("并网冲突：发电机不可直连！");
                 startNode.TriggerProtection("并网短路！");
                 endNode.TriggerProtection("并网短路！");
@@ -94,25 +90,25 @@ namespace ProjectPowerSystemsEngineer.Components
         protected virtual void CheckOverload()
         {
             if (data == null) return;
+
+            // 1. 功率过载保护
             if (CurrentPowerInput > data.maxPowerCapacity && !IsProtectionTripped)
             {
-                TriggerProtection();
+                TriggerProtection("输入功率超过承载上限！");
+            }
+
+            // 2. 【硬核机制】电网稳定度过低引发设备宕机！
+            if (CurrentPowerInput > 0 && data.requiredStability > 0 && CurrentStability < data.requiredStability && !IsProtectionTripped)
+            {
+                TriggerProtection($"电网波动过大！要求: {data.requiredStability} / 当前: {CurrentStability:0.0}");
             }
         }
 
-        // 基础保护触发
-        public virtual void TriggerProtection()
-        {
-            TriggerProtection(null);
-        }
-
-        // 带原因的保护触发
-        public virtual void TriggerProtection(string customReason)
+        public virtual void TriggerProtection(string customReason = null)
         {
             IsProtectionTripped = true;
             if (string.IsNullOrEmpty(customReason))
             {
-                // 使用 ?. 防止残影没有 data 时报错
                 Debug.LogWarning($"[警报] {data?.componentName} 过载！输入:{CurrentPowerInput}MW。已切断输出！");
             }
             else
@@ -126,14 +122,12 @@ namespace ProjectPowerSystemsEngineer.Components
         {
             if (!UIManager.ShowFloatingUI || Camera.main == null || data == null) return;
 
-            // 【核心修复】区分普通建筑和电线的坐标获取方式
             Vector3 worldPos;
             if (data.isPointToPointCable)
             {
                 LineRenderer lr = GetComponent<LineRenderer>();
                 if (lr != null && lr.positionCount >= 2)
                 {
-                    // 电线的坐标取两端的中点，并且高度稍微降低一点以防止挡住建筑
                     worldPos = (lr.GetPosition(0) + lr.GetPosition(1)) / 2f + Vector3.up * 0.5f;
                 }
                 else
@@ -143,7 +137,6 @@ namespace ProjectPowerSystemsEngineer.Components
             }
             else
             {
-                // 普通建筑取自身坐标正上方
                 worldPos = transform.position + Vector3.up * 1.5f;
             }
 

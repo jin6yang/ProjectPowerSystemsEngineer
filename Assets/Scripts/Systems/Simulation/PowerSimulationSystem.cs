@@ -20,7 +20,7 @@ namespace ProjectPowerSystemsEngineer.Simulation
         {
             PowerNode[] rawNodes = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
 
-            // 【核心防呆修复】过滤掉所有没有注入 data 数据的游离节点（残影 Ghost）
+            // 过滤掉所有没有数据的游离节点（比如充当鼠标残影的 Ghost 物体）
             List<PowerNode> allNodes = new List<PowerNode>();
             foreach (var node in rawNodes)
             {
@@ -55,7 +55,10 @@ namespace ProjectPowerSystemsEngineer.Simulation
                 {
                     if (node.data.category == ComponentCategory.Generation)
                     {
-                        node.ReceivePower(node.data.powerGeneration, 10f);
+                        // 【硬核修正】发电机产生的初始稳定度，取决于它的自身属性 (Stability Modifier)
+                        // 不再是无脑完美的 10 稳定度！
+                        float baseStability = node.data.stabilityModifier;
+                        node.ReceivePower(node.data.powerGeneration, baseStability);
                     }
                     queue.Enqueue(node);
                 }
