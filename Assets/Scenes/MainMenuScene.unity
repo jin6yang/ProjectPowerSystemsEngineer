@@ -215,7 +215,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.85983825, g: 0.85983825, b: 0.85983825, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -297,7 +297,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Select Module
+  m_text: SELECT Module
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: a867d301009e5074ebf716979b1e9b33, type: 2}
   m_sharedMaterial: {fileID: -3732015911945032711, guid: a867d301009e5074ebf716979b1e9b33, type: 2}
@@ -4454,7 +4454,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.8627451, g: 0.8627451, b: 0.8627451, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -4701,7 +4701,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.8627451, g: 0.8627451, b: 0.8627451, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -4934,8 +4934,11 @@ MonoBehaviour:
   btnClosePower: {fileID: 1785131592}
   btnBack: {fileID: 1193494726}
   txtLevelNameDisplay: {fileID: 652919247}
-  currentChapter: {fileID: 0}
-  levelButtons: []
+  currentChapter: {fileID: 11400000, guid: d0ec9163649c0504d81d74c60fd2a032, type: 2}
+  levelButtons:
+  - {fileID: 26319387}
+  - {fileID: 1942234087}
+  - {fileID: 2028892192}
   imgYellowBar: {fileID: 1295182471}
   txtLoadingPercent: {fileID: 482367663}
 --- !u!1 &2113648655
