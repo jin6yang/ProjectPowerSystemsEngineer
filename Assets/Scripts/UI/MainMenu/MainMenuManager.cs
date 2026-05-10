@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-using ProjectPowerSystemsEngineer.Data; // 引入数据命名空间
+using ProjectPowerSystemsEngineer.Data;
 
 namespace ProjectPowerSystemsEngineer.UI
 {
@@ -36,9 +36,6 @@ namespace ProjectPowerSystemsEngineer.UI
         public Button btnBack;
         public TextMeshProUGUI txtLevelNameDisplay;
 
-        // ==========================================
-        // 【核心解耦】数据与UI槽位彻底分离
-        // ==========================================
         [Header("数据源 (Data Source)")]
         [Tooltip("拖入创建好的章节数据资产 (ScriptableObject)")]
         public ChapterData currentChapter;
@@ -55,6 +52,9 @@ namespace ProjectPowerSystemsEngineer.UI
         private bool isPowerMenuOpen = false;
 
         private static MainMenuManager _instance;
+
+        // 【新增】用于管理文字淡入淡出的协程，防止玩家快速滑动鼠标导致动画冲突
+        private Coroutine nameFadeCoroutine;
 
         private void Awake()
         {
@@ -86,9 +86,6 @@ namespace ProjectPowerSystemsEngineer.UI
 
             if (OnyxController.Instance != null) OnyxController.Instance.SetState(OnyxState.Sleepy);
 
-            // ==========================================
-            // 动态组装：将卡带数据灌入 UI 按钮
-            // ==========================================
             if (currentChapter != null && levelButtons != null)
             {
                 HashSet<Button> boundButtons = new HashSet<Button>();
@@ -101,7 +98,6 @@ namespace ProjectPowerSystemsEngineer.UI
 
                     if (btn == null) continue;
 
-                    // 防御：如果你不小心在槽位里拖了两次同一个按钮，黄字警告
                     if (boundButtons.Contains(btn))
                     {
                         Debug.LogWarning($"<color=yellow>[UI 警告] UI 按钮槽位中的第 {i} 项拖入了重复的按钮 ({btn.name})！请检查 Inspector！</color>");
@@ -110,7 +106,6 @@ namespace ProjectPowerSystemsEngineer.UI
 
                     btn.onClick.RemoveAllListeners();
 
-                    // 【解耦优势】不再传 index，直接把具体的路径传给加载函数
                     string targetScenePath = levelInfo.scenePath;
                     btn.onClick.AddListener(() => OnLevelButtonClicked(targetScenePath));
 
@@ -118,20 +113,19 @@ namespace ProjectPowerSystemsEngineer.UI
                     if (trigger == null) trigger = btn.gameObject.AddComponent<EventTrigger>();
                     else trigger.triggers.Clear();
 
+                    // 【优化】悬停进入：调用专属的淡入函数
                     EventTrigger.Entry entryEnter = new EventTrigger.Entry();
                     entryEnter.eventID = EventTriggerType.PointerEnter;
                     entryEnter.callback.AddListener((data) => {
-                        if (txtLevelNameDisplay != null)
-                        {
-                            txtLevelNameDisplay.text = levelInfo.levelName;
-                        }
+                        ShowLevelName(levelInfo.levelName);
                     });
                     trigger.triggers.Add(entryEnter);
 
+                    // 【优化】悬停离开：调用专属的淡出函数
                     EventTrigger.Entry entryExit = new EventTrigger.Entry();
                     entryExit.eventID = EventTriggerType.PointerExit;
                     entryExit.callback.AddListener((data) => {
-                        if (txtLevelNameDisplay != null) txtLevelNameDisplay.text = "";
+                        HideLevelName();
                     });
                     trigger.triggers.Add(entryExit);
                 }
@@ -141,9 +135,11 @@ namespace ProjectPowerSystemsEngineer.UI
                 Debug.LogWarning("[UI系统] 未配置 Chapter Data 数据源或 UI 按钮槽位为空！");
             }
 
+            // 【优化】初始状态不仅清空文字，还将 TMP 的透明度设为 0
             if (txtLevelNameDisplay != null)
             {
                 txtLevelNameDisplay.text = "";
+                txtLevelNameDisplay.alpha = 0f;
             }
 
             if (imgYellowBar != null)
@@ -171,6 +167,55 @@ namespace ProjectPowerSystemsEngineer.UI
             }
         }
 
+        // ==========================================
+        // 【核心新增】优雅的关卡名字淡入淡出动画控制
+        // ==========================================
+        private void ShowLevelName(string name)
+        {
+            if (txtLevelNameDisplay == null) return;
+
+            // 打断之前可能正在进行的淡出动画
+            if (nameFadeCoroutine != null) StopCoroutine(nameFadeCoroutine);
+
+            // 瞬间切换文字内容，然后平滑提高透明度 (0.15秒极速淡入)
+            txtLevelNameDisplay.text = name;
+            nameFadeCoroutine = StartCoroutine(FadeTextAlphaRoutine(1f, 0.15f));
+        }
+
+        private void HideLevelName()
+        {
+            if (txtLevelNameDisplay == null) return;
+
+            // 打断淡入，平滑降低透明度 (0.1秒极速淡出，比淡入更快显得干净利落)
+            if (nameFadeCoroutine != null) StopCoroutine(nameFadeCoroutine);
+            nameFadeCoroutine = StartCoroutine(FadeTextAlphaRoutine(0f, 0.1f));
+        }
+
+        private IEnumerator FadeTextAlphaRoutine(float targetAlpha, float duration)
+        {
+            // 获取当前文本的真实透明度，而不是写死从0开始，这保证了连续滑动的丝滑感
+            float startAlpha = txtLevelNameDisplay.alpha;
+            float time = 0;
+
+            while (time < duration)
+            {
+                time += Time.unscaledDeltaTime; // 使用不受时间暂停影响的 DeltaTime
+                txtLevelNameDisplay.alpha = Mathf.Lerp(startAlpha, targetAlpha, time / duration);
+                yield return null;
+            }
+
+            txtLevelNameDisplay.alpha = targetAlpha;
+
+            // 只有当文字彻底透明后，才清空文本，防止在淡出途中发生字体的闪烁/偏移
+            if (targetAlpha <= 0f)
+            {
+                txtLevelNameDisplay.text = "";
+            }
+        }
+
+        // ==========================================
+        // 以下为原有控制与加载逻辑
+        // ==========================================
         private void OpenPowerMenu()
         {
             if (isPowerMenuOpen) return;
