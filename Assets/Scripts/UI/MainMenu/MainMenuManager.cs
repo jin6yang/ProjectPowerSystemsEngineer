@@ -2,12 +2,31 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections;
+using System.Collections.Generic; // 引入泛型集合用于排重
 using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 namespace ProjectPowerSystemsEngineer.UI
 {
+    [System.Serializable]
+    public class LevelSelectData
+    {
+        [Tooltip("拖入该关卡对应的 UI 按钮")]
+        public Button levelButton;
+
+        [Tooltip("鼠标悬停时，在下方显示的关卡中文名称")]
+        public string levelName;
+
+#if UNITY_EDITOR
+        [Tooltip("直接从 Project 窗口拖入关卡场景文件 (.unity)")]
+        public UnityEditor.SceneAsset sceneFile;
+#endif
+
+        [HideInInspector]
+        public string scenePath;
+    }
+
     public class MainMenuManager : MonoBehaviour
     {
         [Header("Panels")]
@@ -15,7 +34,7 @@ namespace ProjectPowerSystemsEngineer.UI
         public CanvasGroup panelMain;
         public CanvasGroup panelLevelSelect;
         public CanvasGroup panelLoading;
-        public CanvasGroup panelPowerMenu; // 新增：电源菜单面板
+        public CanvasGroup panelPowerMenu;
 
         [Header("Top Bar UI")]
         public TextMeshProUGUI txtSystemTime;
@@ -33,11 +52,9 @@ namespace ProjectPowerSystemsEngineer.UI
         [Header("Level Select UI")]
         public Button btnBack;
         public TextMeshProUGUI txtLevelNameDisplay;
-        public Button[] btnLevels;
 
-        // 场景名称配置
-        private string[] levelNames = { "反应堆初始化测试", "高压电网搭建", "沙盒模式" };
-        private string[] sceneNames = { "Level_DevTest_01", "Level_02", "Level_03" };
+        [Header("关卡配置列表 (Level Configuration)")]
+        public LevelSelectData[] levelDatas;
 
         [Header("Loading UI")]
         public Image imgYellowBar;
@@ -46,9 +63,38 @@ namespace ProjectPowerSystemsEngineer.UI
         private float initialBarWidth;
         private bool isPowerMenuOpen = false;
 
+        // 【防御机制 1】单例检测，防止场景中存在多个隐藏的 Manager 导致事件疯狂叠加！
+        private static MainMenuManager _instance;
+
+        private void Awake()
+        {
+            if (_instance != null && _instance != this)
+            {
+                Debug.LogError($"<color=red>[严重警告] 场景中存在多个 MainMenuManager！这是导致文字被异常覆盖的元凶！已自动摧毁多余组件：{gameObject.name}</color>");
+                Destroy(this);
+                return;
+            }
+            _instance = this;
+        }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (levelDatas != null)
+            {
+                for (int i = 0; i < levelDatas.Length; i++)
+                {
+                    if (levelDatas[i] != null && levelDatas[i].sceneFile != null)
+                    {
+                        levelDatas[i].scenePath = UnityEditor.AssetDatabase.GetAssetPath(levelDatas[i].sceneFile);
+                    }
+                }
+            }
+        }
+#endif
+
         private void Start()
         {
-            // 初始状态强制设定
             SetCanvasGroupAlpha(panelSelectUser, 1f, true);
             SetCanvasGroupAlpha(panelMain, 0f, false);
             SetCanvasGroupAlpha(panelLevelSelect, 0f, false);
@@ -59,7 +105,6 @@ namespace ProjectPowerSystemsEngineer.UI
             if (btnStartGame != null) btnStartGame.onClick.AddListener(OnStartGameClicked);
             if (btnBack != null) btnBack.onClick.AddListener(OnBackClicked);
 
-            // 绑定电源菜单按钮
             if (btnPowerIcon != null) btnPowerIcon.onClick.AddListener(OpenPowerMenu);
             if (btnClosePower != null) btnClosePower.onClick.AddListener(ClosePowerMenu);
             if (btnLogout != null) btnLogout.onClick.AddListener(OnLogoutClicked);
@@ -67,33 +112,59 @@ namespace ProjectPowerSystemsEngineer.UI
 
             if (OnyxController.Instance != null) OnyxController.Instance.SetState(OnyxState.Sleepy);
 
-            // 自动绑定关卡选择按钮的悬停事件
-            for (int i = 0; i < btnLevels.Length; i++)
+            // 【防御机制 2】按钮重复检测器
+            HashSet<Button> boundButtons = new HashSet<Button>();
+
+            for (int i = 0; i < levelDatas.Length; i++)
             {
                 int index = i;
-                btnLevels[i].onClick.AddListener(() => OnLevelButtonClicked(index));
+                Button btn = levelDatas[index].levelButton;
 
-                // 获取或添加 EventTrigger 组件
-                EventTrigger trigger = btnLevels[i].gameObject.GetComponent<EventTrigger>();
-                if (trigger == null) trigger = btnLevels[i].gameObject.AddComponent<EventTrigger>();
+                if (btn == null) continue;
 
-                // 1. 悬停进入 (PointerEnter)：显示对应的关卡名
+                if (boundButtons.Contains(btn))
+                {
+                    Debug.LogWarning($"<color=yellow>[UI 警告] 关卡列表中的第 {i} 项绑定了重复的按钮 ({btn.name})！请检查 Inspector 配置！</color>");
+                }
+                boundButtons.Add(btn);
+
+                btn.onClick.RemoveAllListeners(); // 清理点击事件残留
+                btn.onClick.AddListener(() => OnLevelButtonClicked(index));
+
+                EventTrigger trigger = btn.gameObject.GetComponent<EventTrigger>();
+                if (trigger == null)
+                {
+                    trigger = btn.gameObject.AddComponent<EventTrigger>();
+                }
+                else
+                {
+                    // 【防御机制 3】极其关键！清空该按钮上历史遗留的所有 Hover 事件，保证纯净单次触发！
+                    trigger.triggers.Clear();
+                }
+
                 EventTrigger.Entry entryEnter = new EventTrigger.Entry();
                 entryEnter.eventID = EventTriggerType.PointerEnter;
-                entryEnter.callback.AddListener((data) => { txtLevelNameDisplay.text = levelNames[index]; });
+                entryEnter.callback.AddListener((data) => {
+                    if (txtLevelNameDisplay != null)
+                    {
+                        txtLevelNameDisplay.text = levelDatas[index].levelName;
+                    }
+                });
                 trigger.triggers.Add(entryEnter);
 
-                // 2. 悬停离开 (PointerExit)：清空关卡名文字
                 EventTrigger.Entry entryExit = new EventTrigger.Entry();
                 entryExit.eventID = EventTriggerType.PointerExit;
-                entryExit.callback.AddListener((data) => { txtLevelNameDisplay.text = ""; });
+                entryExit.callback.AddListener((data) => {
+                    if (txtLevelNameDisplay != null) txtLevelNameDisplay.text = "";
+                });
                 trigger.triggers.Add(entryExit);
             }
 
-            // 【核心修改】初始状态下，默认显示文字为空
-            txtLevelNameDisplay.text = "";
+            if (txtLevelNameDisplay != null)
+            {
+                txtLevelNameDisplay.text = "";
+            }
 
-            // 锁定在Editor中设定的加载条宽度
             if (imgYellowBar != null)
             {
                 initialBarWidth = imgYellowBar.rectTransform.rect.width;
@@ -104,30 +175,21 @@ namespace ProjectPowerSystemsEngineer.UI
         {
             if (txtSystemTime != null) txtSystemTime.text = System.DateTime.Now.ToString("HH:mm");
 
-            // 监听 ESC 键 或 手柄 B 键
             bool isCancelPressed = (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) ||
                                    (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame);
 
             if (isCancelPressed)
             {
-                if (isPowerMenuOpen)
-                {
-                    ClosePowerMenu();
-                }
-                else if (panelLevelSelect.alpha > 0.5f)
-                {
-                    OnBackClicked(); // 在关卡选择界面按ESC可返回主菜单
-                }
+                if (isPowerMenuOpen) ClosePowerMenu();
+                else if (panelLevelSelect.alpha > 0.5f) OnBackClicked();
             }
 
-            // 开发者快捷通道：按 ~ 键进入测试关卡
             if (panelLevelSelect.alpha > 0.5f && Keyboard.current != null && Keyboard.current.backquoteKey.wasPressedThisFrame)
             {
                 StartCoroutine(TransitionToLoadingAndLoad("Level_DevTest_01"));
             }
         }
 
-        // ==================== 电源菜单控制逻辑 ====================
         private void OpenPowerMenu()
         {
             if (isPowerMenuOpen) return;
@@ -159,7 +221,6 @@ namespace ProjectPowerSystemsEngineer.UI
 #endif
         }
 
-        // ==================== 主菜单导航逻辑 ====================
         private void OnLoginClicked()
         {
             StartCoroutine(CrossFadePanels(panelSelectUser, panelMain, () => {
@@ -179,13 +240,20 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private void OnLevelButtonClicked(int index)
         {
-            if (index < sceneNames.Length)
+            if (index < levelDatas.Length)
             {
-                StartCoroutine(TransitionToLoadingAndLoad(sceneNames[index]));
+                string targetScene = levelDatas[index].scenePath;
+                if (!string.IsNullOrEmpty(targetScene))
+                {
+                    StartCoroutine(TransitionToLoadingAndLoad(targetScene));
+                }
+                else
+                {
+                    Debug.LogWarning("[UI系统] 关卡未配置 Scene File，无法加载！");
+                }
             }
         }
 
-        // 核心UI交叉淡入淡出 (支持传 null 以实现单边淡入/淡出)
         private IEnumerator CrossFadePanels(CanvasGroup fadeOut, CanvasGroup fadeIn, System.Action onComplete = null)
         {
             if (fadeOut != null) fadeOut.interactable = false;
@@ -206,7 +274,6 @@ namespace ProjectPowerSystemsEngineer.UI
             onComplete?.Invoke();
         }
 
-        // ==================== 终极解耦加载系统 ====================
         private IEnumerator TransitionToLoadingAndLoad(string targetScene)
         {
             yield return StartCoroutine(CrossFadePanels(panelLevelSelect, panelLoading));
@@ -227,7 +294,6 @@ namespace ProjectPowerSystemsEngineer.UI
             float displayProgress = 0f;
             int phase = 0;
 
-            // 伪加载曲线节奏控制
             while (displayProgress < 1f)
             {
                 if (phase == 0)
@@ -284,7 +350,6 @@ namespace ProjectPowerSystemsEngineer.UI
             barRect.anchorMax = Vector2.one;
             barRect.offsetMax = Vector2.zero;
 
-            // 解耦执行：交接棒给下一个场景里的 SceneFadeIn.cs
             asyncLoad.allowSceneActivation = true;
         }
 
