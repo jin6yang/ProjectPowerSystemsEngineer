@@ -4934,19 +4934,8 @@ MonoBehaviour:
   btnClosePower: {fileID: 1785131592}
   btnBack: {fileID: 1193494726}
   txtLevelNameDisplay: {fileID: 652919247}
-  levelDatas:
-  - levelButton: {fileID: 26319387}
-    levelName: The - Filter
-    sceneFile: {fileID: 102900000, guid: 3b59ce22970e83b44a632b1794f0162c, type: 3}
-    scenePath: Assets/Scenes/Level_01_TheFilter.unity
-  - levelButton: {fileID: 26319387}
-    levelName: TheFilter
-    sceneFile: {fileID: 102900000, guid: 3b59ce22970e83b44a632b1794f0162c, type: 3}
-    scenePath: Assets/Scenes/Level_01_TheFilter.unity
-  - levelButton: {fileID: 26319387}
-    levelName: TheFilter
-    sceneFile: {fileID: 102900000, guid: 3b59ce22970e83b44a632b1794f0162c, type: 3}
-    scenePath: Assets/Scenes/Level_01_TheFilter.unity
+  currentChapter: {fileID: 0}
+  levelButtons: []
   imgYellowBar: {fileID: 1295182471}
   txtLoadingPercent: {fileID: 482367663}
 --- !u!1 &2113648655
