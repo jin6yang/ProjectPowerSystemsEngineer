@@ -210,16 +210,16 @@ namespace ProjectPowerSystemsEngineer.Components
                     textColor = new Color(0.7f, 0.7f, 0.7f);
                 }
 
-                // 【视觉修复】清晰区分充电透传与备用放电的真实输出功率
+                // 【视觉修复】让储能阵列的 UI 显示宏观总数据，而不是被均摊的个体数据！
                 float displayPower = CurrentPowerInput;
                 if (data.category == ComponentCategory.Generation)
                     displayPower = data.powerGeneration;
                 else if (data.category == ComponentCategory.Storage && MyPool != null)
                 {
                     if (MyPool.IsReceivingExternalPower)
-                        displayPower = CurrentPowerInput;
+                        displayPower = MyPool.SharedPowerInput; // 充电模式：显示整个阵列汇入的总电流
                     else
-                        displayPower = GetPowerOutput();
+                        displayPower = GetPowerOutput();        // 放电模式：显示整个阵列发出的总电量
                 }
 
                 string displayText = $"{statusText}{data.componentName}\n{displayPower} MW | S:{GetStabilityOutput():0.0}";
@@ -237,11 +237,12 @@ namespace ProjectPowerSystemsEngineer.Components
         }
 
         // ==========================================
+        // 【核心机制修复】严格区分 储能透传 与 放电产出 模式，并接入宏观总数据！
+        // ==========================================
         // 【核心机制修复】严格区分 储能透传 与 放电产出 模式
         // ==========================================
         public virtual float GetPowerOutput()
         {
-            // 只要触发保护烧毁，无视任何规则，强行输出 0
             if (IsProtectionTripped || data == null) return 0f;
 
             if (data.category == ComponentCategory.Generation)
@@ -249,17 +250,7 @@ namespace ProjectPowerSystemsEngineer.Components
 
             if (data.category == ComponentCategory.Storage && MyPool != null)
             {
-                if (MyPool.IsReceivingExternalPower)
-                {
-                    // 储能模式：仅仅是一个透传中转站，绝不无中生有叠加自身发电量
-                    return Mathf.Max(0f, CurrentPowerInput - data.powerConsumption);
-                }
-                else
-                {
-                    // 放电模式：只有在池子有电时才作为备用电源输出，否则一滴电都没有
-                    if (MyPool.IsCharged) return data.powerGeneration;
-                    else return 0f;
-                }
+                return MyPool.CachedOutPower;
             }
 
             return Mathf.Max(0f, CurrentPowerInput - data.powerConsumption);
@@ -270,21 +261,13 @@ namespace ProjectPowerSystemsEngineer.Components
             if (IsProtectionTripped || data == null) return 0f;
 
             if (data.category == ComponentCategory.Generation)
-                return data.stabilityModifier;
+                // 【核心修复】：发电机不再死板地返回自己的默认值，而是返回源头注入了全局全网储能电容加成后的“真实稳定度”！
+                return CurrentStability;
 
             if (data.category == ComponentCategory.Storage && MyPool != null)
             {
-                if (MyPool.IsReceivingExternalPower)
-                {
-                    // 【机制修复】充电满载模式：它是一个强力稳压器，使用专用的 storageStabilityModifier
-                    if (MyPool.IsCharged) return Mathf.Clamp(CurrentStability + data.storageStabilityModifier, 0f, 10f);
-                    else return CurrentStability;
-                }
-                else
-                {
-                    // 【机制修复】放电模式：它是最原始的备用电源，不提供任何稳定度加成！必须通过外部变电站稳压
-                    return 0f;
-                }
+                // 储能节点由于已经把加成贡献给了源头发电机，它在此刻只负责如实汇报当前电网总计的稳定度
+                return MyPool.CachedOutStability;
             }
 
             return Mathf.Clamp(CurrentStability + data.stabilityModifier, 0f, 10f);
