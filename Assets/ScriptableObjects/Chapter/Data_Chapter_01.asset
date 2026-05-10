@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d569215cb3dcda44832702ac5593fa2, type: 3}
+  m_Name: Data_Chapter_01
+  m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Data.ChapterData
+  chapterName: Chapter 01
+  levels:
+  - levelName: The Fliter
+    sceneFile: {fileID: 102900000, guid: 3b59ce22970e83b44a632b1794f0162c, type: 3}
+    scenePath: Assets/Scenes/Level_01_TheFilter.unity
+  - levelName: Storage Logistics
+    sceneFile: {fileID: 102900000, guid: dc86738d2ce021043861e8a57d254d15, type: 3}
+    scenePath: Assets/Scenes/Level_02_StorageLogistics.unity
+  - levelName: Precision Engineering
+    sceneFile: {fileID: 102900000, guid: 8ba027ef79c98cf4db2dff8ba28df0a8, type: 3}
+    scenePath: Assets/Scenes/Level_03_PrecisionEngineering.unity
