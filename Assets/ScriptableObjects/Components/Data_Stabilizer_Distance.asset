@@ -10,22 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cf33d6efa5ae47f478a3d08f4dd50968, type: 3}
-  m_Name: Data_StandardCable
+  m_Name: Data_Stabilizer_Distance
   m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Data.ComponentData
-  componentName: Standard Power Cable
+  componentName: Distance Stabilizer
   category: 1
-  prefab: {fileID: 7666732654826082241, guid: c45212ea2e79863469ad505fcee6827d, type: 3}
-  ghostPrefab: {fileID: 0}
-  uiIcon: {fileID: 21300000, guid: 631558a8961e07b45af20b9095918655, type: 3}
+  prefab: {fileID: 7911970868778714162, guid: af20370c7cb15324983f890a5b267730, type: 3}
+  ghostPrefab: {fileID: 7911970868778714162, guid: af20370c7cb15324983f890a5b267730, type: 3}
+  uiIcon: {fileID: 21300000, guid: 8cd5e35cd378fe446b8c7ab2ef40d256, type: 3}
   buildCost: 100
   powerGeneration: 0
   powerConsumption: 0
-  maxPowerCapacity: 250
-  stabilityModifier: 0
+  maxPowerCapacity: 1000
+  stabilityModifier: 3
   requiredStability: 0
   chargeTime: 2
   dischargeTime: 4
   storageStabilityModifier: 5
   isWalkable: 0
-  isPointToPointCable: 1
+  isPointToPointCable: 0
   maxCableLength: 4
