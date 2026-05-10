@@ -382,17 +382,17 @@ namespace ProjectPowerSystemsEngineer.Simulation
                         if (pool.IsReceivingExternalPower)
                         {
                             float totalConsumption = 0f;
-                            float maxMod = 0f;
+                            float totalMod = 0f; // 【核心修复】从 maxMod 改为 totalMod 累加
                             foreach (var pNode in pool.Nodes)
                             {
                                 if (!pNode.IsProtectionTripped)
                                 {
                                     totalConsumption += pNode.data.powerConsumption;
-                                    maxMod = Mathf.Max(maxMod, pNode.data.storageStabilityModifier);
+                                    totalMod += pNode.data.storageStabilityModifier; // 完美叠加所有的稳定度加成！
                                 }
                             }
                             poolOutPower = Mathf.Max(0f, pool.SharedPowerInput - totalConsumption);
-                            poolOutStability = pool.IsCharged ? Mathf.Clamp(pool.SharedStability + maxMod, 0f, 10f) : pool.SharedStability;
+                            poolOutStability = pool.IsCharged ? Mathf.Clamp(pool.SharedStability + totalMod, 0f, 10f) : pool.SharedStability;
                         }
                         else
                         {
@@ -405,6 +405,10 @@ namespace ProjectPowerSystemsEngineer.Simulation
                             }
                             poolOutStability = 0f;
                         }
+
+                        // 【新增】将计算结果缓存回池子，供 UI 和外部极速调用
+                        pool.CachedOutPower = poolOutPower;
+                        pool.CachedOutStability = poolOutStability;
 
                         // 3. 寻找对外的宏观连接
                         List<PowerNode> externalTargets = new List<PowerNode>();
