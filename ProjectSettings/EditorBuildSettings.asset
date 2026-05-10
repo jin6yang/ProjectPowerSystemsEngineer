@@ -14,6 +14,15 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Level_DevTest_01.unity
     guid: 10f9b83b99ef66945a790803f37f2425
+  - enabled: 1
+    path: Assets/Scenes/Level_01_TheFilter.unity
+    guid: 3b59ce22970e83b44a632b1794f0162c
+  - enabled: 1
+    path: Assets/Scenes/Level_02_StorageLogistics.unity
+    guid: dc86738d2ce021043861e8a57d254d15
+  - enabled: 1
+    path: Assets/Scenes/Level_03_PrecisionEngineering.unity
+    guid: 8ba027ef79c98cf4db2dff8ba28df0a8
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
