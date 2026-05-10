@@ -24,7 +24,6 @@ namespace ProjectPowerSystemsEngineer.Core
         public float maxPitch = 85f;
 
         [Header("Gamepad Settings")]
-        public float gamepadCursorSpeed = 1000f; // 手柄推动虚拟鼠标的速度
         public float gamepadRotationSpeed = 50f; // 手柄旋转视角的敏感度
 
         [Header("Smoothing (Lerp)")]
@@ -50,44 +49,14 @@ namespace ProjectPowerSystemsEngineer.Core
 
         void LateUpdate()
         {
-            // 安全检查：如果有鼠标键盘就读取，有手柄也会自动读取
             if (Keyboard.current == null || Mouse.current == null) return;
 
-            HandleVirtualCursor(); // 必须最先处理虚拟光标的移动
+            // 【已移除旧版的虚拟光标处理函数，移交全局管理器】
             HandleMovementInput();
             HandleRotationInput();
             HandleZoomInput();
 
             ApplySmoothing();
-        }
-
-        private void HandleVirtualCursor()
-        {
-            Gamepad gamepad = Gamepad.current;
-            if (gamepad == null) return;
-
-            // 如果推动了右摇杆，并且【没有】按下右摇杆 (R3)
-            if (!gamepad.rightStickButton.isPressed)
-            {
-                Vector2 rightStick = gamepad.rightStick.ReadValue();
-
-                // 给摇杆加一个死区(Deadzone)，防止手柄漂移导致鼠标自己乱动
-                if (rightStick.sqrMagnitude > 0.05f)
-                {
-                    // 获取当前鼠标位置
-                    Vector2 currentMousePos = Mouse.current.position.ReadValue();
-
-                    // 计算新位置 (摇杆值 [-1, 1] * 速度 * DeltaTime)
-                    Vector2 newMousePos = currentMousePos + rightStick * gamepadCursorSpeed * Time.deltaTime;
-
-                    // 限制光标在屏幕范围内
-                    newMousePos.x = Mathf.Clamp(newMousePos.x, 0, Screen.width);
-                    newMousePos.y = Mathf.Clamp(newMousePos.y, 0, Screen.height);
-
-                    // 【核心魔法】强行将系统鼠标光标传送到新位置
-                    Mouse.current.WarpCursorPosition(newMousePos);
-                }
-            }
         }
 
         private void HandleMovementInput()
@@ -121,7 +90,7 @@ namespace ProjectPowerSystemsEngineer.Core
             }
 
             movement.y = 0;
-            if (movement.sqrMagnitude > 1f) movement.Normalize(); // 防止WASD和摇杆叠加导致超速
+            if (movement.sqrMagnitude > 1f) movement.Normalize();
 
             targetPosition += movement * panSpeed * Time.deltaTime;
 
@@ -143,7 +112,6 @@ namespace ProjectPowerSystemsEngineer.Core
             Gamepad gamepad = Gamepad.current;
             bool isGamepadRotating = gamepad != null && gamepad.rightStickButton.isPressed;
 
-            // 如果按住了鼠标右键 OR 按下了手柄右摇杆(R3)
             if (Mouse.current.rightButton.isPressed || isGamepadRotating)
             {
                 float deltaX = 0f;
@@ -156,7 +124,6 @@ namespace ProjectPowerSystemsEngineer.Core
                 }
                 else if (isGamepadRotating)
                 {
-                    // 手柄摇杆返回的是 [-1, 1] 的持续值，所以要乘 deltaTime 和专属的速度变量
                     deltaX = gamepad.rightStick.ReadValue().x * gamepadRotationSpeed * Time.deltaTime;
                     deltaY = gamepad.rightStick.ReadValue().y * gamepadRotationSpeed * Time.deltaTime;
                 }
@@ -174,19 +141,17 @@ namespace ProjectPowerSystemsEngineer.Core
 
         private void HandleZoomInput()
         {
-            // 1. 鼠标滚轮缩放
             float scrollValue = Mouse.current.scroll.ReadValue().y;
             if (Mathf.Abs(scrollValue) > 0.01f)
             {
                 targetZoom -= Mathf.Sign(scrollValue) * zoomSpeed * 0.5f;
             }
 
-            // 2. 手柄扳机键缩放 (RT拉近，LT推远)
             Gamepad gamepad = Gamepad.current;
             if (gamepad != null)
             {
-                float rtValue = gamepad.rightTrigger.ReadValue(); // [0, 1]
-                float ltValue = gamepad.leftTrigger.ReadValue();  // [0, 1]
+                float rtValue = gamepad.rightTrigger.ReadValue();
+                float ltValue = gamepad.leftTrigger.ReadValue();
 
                 if (rtValue > 0.1f) targetZoom -= zoomSpeed * rtValue * Time.deltaTime;
                 if (ltValue > 0.1f) targetZoom += zoomSpeed * ltValue * Time.deltaTime;
