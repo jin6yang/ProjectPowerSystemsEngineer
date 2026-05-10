@@ -73,14 +73,25 @@ namespace ProjectPowerSystemsEngineer.UI
                 int index = i;
                 btnLevels[i].onClick.AddListener(() => OnLevelButtonClicked(index));
 
-                EventTrigger trigger = btnLevels[i].gameObject.AddComponent<EventTrigger>();
-                EventTrigger.Entry entry = new EventTrigger.Entry();
-                entry.eventID = EventTriggerType.PointerEnter;
-                entry.callback.AddListener((data) => { txtLevelNameDisplay.text = levelNames[index]; });
-                trigger.triggers.Add(entry);
+                // 获取或添加 EventTrigger 组件
+                EventTrigger trigger = btnLevels[i].gameObject.GetComponent<EventTrigger>();
+                if (trigger == null) trigger = btnLevels[i].gameObject.AddComponent<EventTrigger>();
+
+                // 1. 悬停进入 (PointerEnter)：显示对应的关卡名
+                EventTrigger.Entry entryEnter = new EventTrigger.Entry();
+                entryEnter.eventID = EventTriggerType.PointerEnter;
+                entryEnter.callback.AddListener((data) => { txtLevelNameDisplay.text = levelNames[index]; });
+                trigger.triggers.Add(entryEnter);
+
+                // 2. 悬停离开 (PointerExit)：清空关卡名文字
+                EventTrigger.Entry entryExit = new EventTrigger.Entry();
+                entryExit.eventID = EventTriggerType.PointerExit;
+                entryExit.callback.AddListener((data) => { txtLevelNameDisplay.text = ""; });
+                trigger.triggers.Add(entryExit);
             }
 
-            txtLevelNameDisplay.text = "请选择模拟项目";
+            // 【核心修改】初始状态下，默认显示文字为空
+            txtLevelNameDisplay.text = "";
 
             // 锁定在Editor中设定的加载条宽度
             if (imgYellowBar != null)
