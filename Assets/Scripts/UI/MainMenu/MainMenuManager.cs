@@ -2,31 +2,14 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections;
-using System.Collections.Generic; // 引入泛型集合用于排重
+using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using ProjectPowerSystemsEngineer.Data; // 引入数据命名空间
 
 namespace ProjectPowerSystemsEngineer.UI
 {
-    [System.Serializable]
-    public class LevelSelectData
-    {
-        [Tooltip("拖入该关卡对应的 UI 按钮")]
-        public Button levelButton;
-
-        [Tooltip("鼠标悬停时，在下方显示的关卡中文名称")]
-        public string levelName;
-
-#if UNITY_EDITOR
-        [Tooltip("直接从 Project 窗口拖入关卡场景文件 (.unity)")]
-        public UnityEditor.SceneAsset sceneFile;
-#endif
-
-        [HideInInspector]
-        public string scenePath;
-    }
-
     public class MainMenuManager : MonoBehaviour
     {
         [Header("Panels")]
@@ -53,8 +36,16 @@ namespace ProjectPowerSystemsEngineer.UI
         public Button btnBack;
         public TextMeshProUGUI txtLevelNameDisplay;
 
-        [Header("关卡配置列表 (Level Configuration)")]
-        public LevelSelectData[] levelDatas;
+        // ==========================================
+        // 【核心解耦】数据与UI槽位彻底分离
+        // ==========================================
+        [Header("数据源 (Data Source)")]
+        [Tooltip("拖入创建好的章节数据资产 (ScriptableObject)")]
+        public ChapterData currentChapter;
+
+        [Header("UI 按钮槽位 (UI Slots)")]
+        [Tooltip("按顺序拖入界面上的关卡按钮，将自动与数据源中的关卡一一对应")]
+        public Button[] levelButtons;
 
         [Header("Loading UI")]
         public Image imgYellowBar;
@@ -63,7 +54,6 @@ namespace ProjectPowerSystemsEngineer.UI
         private float initialBarWidth;
         private bool isPowerMenuOpen = false;
 
-        // 【防御机制 1】单例检测，防止场景中存在多个隐藏的 Manager 导致事件疯狂叠加！
         private static MainMenuManager _instance;
 
         private void Awake()
@@ -76,22 +66,6 @@ namespace ProjectPowerSystemsEngineer.UI
             }
             _instance = this;
         }
-
-#if UNITY_EDITOR
-        private void OnValidate()
-        {
-            if (levelDatas != null)
-            {
-                for (int i = 0; i < levelDatas.Length; i++)
-                {
-                    if (levelDatas[i] != null && levelDatas[i].sceneFile != null)
-                    {
-                        levelDatas[i].scenePath = UnityEditor.AssetDatabase.GetAssetPath(levelDatas[i].sceneFile);
-                    }
-                }
-            }
-        }
-#endif
 
         private void Start()
         {
@@ -112,52 +86,59 @@ namespace ProjectPowerSystemsEngineer.UI
 
             if (OnyxController.Instance != null) OnyxController.Instance.SetState(OnyxState.Sleepy);
 
-            // 【防御机制 2】按钮重复检测器
-            HashSet<Button> boundButtons = new HashSet<Button>();
-
-            for (int i = 0; i < levelDatas.Length; i++)
+            // ==========================================
+            // 动态组装：将卡带数据灌入 UI 按钮
+            // ==========================================
+            if (currentChapter != null && levelButtons != null)
             {
-                int index = i;
-                Button btn = levelDatas[index].levelButton;
+                HashSet<Button> boundButtons = new HashSet<Button>();
+                int processCount = Mathf.Min(currentChapter.levels.Length, levelButtons.Length);
 
-                if (btn == null) continue;
-
-                if (boundButtons.Contains(btn))
+                for (int i = 0; i < processCount; i++)
                 {
-                    Debug.LogWarning($"<color=yellow>[UI 警告] 关卡列表中的第 {i} 项绑定了重复的按钮 ({btn.name})！请检查 Inspector 配置！</color>");
-                }
-                boundButtons.Add(btn);
+                    Button btn = levelButtons[i];
+                    LevelInfo levelInfo = currentChapter.levels[i];
 
-                btn.onClick.RemoveAllListeners(); // 清理点击事件残留
-                btn.onClick.AddListener(() => OnLevelButtonClicked(index));
+                    if (btn == null) continue;
 
-                EventTrigger trigger = btn.gameObject.GetComponent<EventTrigger>();
-                if (trigger == null)
-                {
-                    trigger = btn.gameObject.AddComponent<EventTrigger>();
-                }
-                else
-                {
-                    // 【防御机制 3】极其关键！清空该按钮上历史遗留的所有 Hover 事件，保证纯净单次触发！
-                    trigger.triggers.Clear();
-                }
-
-                EventTrigger.Entry entryEnter = new EventTrigger.Entry();
-                entryEnter.eventID = EventTriggerType.PointerEnter;
-                entryEnter.callback.AddListener((data) => {
-                    if (txtLevelNameDisplay != null)
+                    // 防御：如果你不小心在槽位里拖了两次同一个按钮，黄字警告
+                    if (boundButtons.Contains(btn))
                     {
-                        txtLevelNameDisplay.text = levelDatas[index].levelName;
+                        Debug.LogWarning($"<color=yellow>[UI 警告] UI 按钮槽位中的第 {i} 项拖入了重复的按钮 ({btn.name})！请检查 Inspector！</color>");
                     }
-                });
-                trigger.triggers.Add(entryEnter);
+                    boundButtons.Add(btn);
 
-                EventTrigger.Entry entryExit = new EventTrigger.Entry();
-                entryExit.eventID = EventTriggerType.PointerExit;
-                entryExit.callback.AddListener((data) => {
-                    if (txtLevelNameDisplay != null) txtLevelNameDisplay.text = "";
-                });
-                trigger.triggers.Add(entryExit);
+                    btn.onClick.RemoveAllListeners();
+
+                    // 【解耦优势】不再传 index，直接把具体的路径传给加载函数
+                    string targetScenePath = levelInfo.scenePath;
+                    btn.onClick.AddListener(() => OnLevelButtonClicked(targetScenePath));
+
+                    EventTrigger trigger = btn.gameObject.GetComponent<EventTrigger>();
+                    if (trigger == null) trigger = btn.gameObject.AddComponent<EventTrigger>();
+                    else trigger.triggers.Clear();
+
+                    EventTrigger.Entry entryEnter = new EventTrigger.Entry();
+                    entryEnter.eventID = EventTriggerType.PointerEnter;
+                    entryEnter.callback.AddListener((data) => {
+                        if (txtLevelNameDisplay != null)
+                        {
+                            txtLevelNameDisplay.text = levelInfo.levelName;
+                        }
+                    });
+                    trigger.triggers.Add(entryEnter);
+
+                    EventTrigger.Entry entryExit = new EventTrigger.Entry();
+                    entryExit.eventID = EventTriggerType.PointerExit;
+                    entryExit.callback.AddListener((data) => {
+                        if (txtLevelNameDisplay != null) txtLevelNameDisplay.text = "";
+                    });
+                    trigger.triggers.Add(entryExit);
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[UI系统] 未配置 Chapter Data 数据源或 UI 按钮槽位为空！");
             }
 
             if (txtLevelNameDisplay != null)
@@ -238,19 +219,15 @@ namespace ProjectPowerSystemsEngineer.UI
             StartCoroutine(CrossFadePanels(panelLevelSelect, panelMain));
         }
 
-        private void OnLevelButtonClicked(int index)
+        private void OnLevelButtonClicked(string targetScenePath)
         {
-            if (index < levelDatas.Length)
+            if (!string.IsNullOrEmpty(targetScenePath))
             {
-                string targetScene = levelDatas[index].scenePath;
-                if (!string.IsNullOrEmpty(targetScene))
-                {
-                    StartCoroutine(TransitionToLoadingAndLoad(targetScene));
-                }
-                else
-                {
-                    Debug.LogWarning("[UI系统] 关卡未配置 Scene File，无法加载！");
-                }
+                StartCoroutine(TransitionToLoadingAndLoad(targetScenePath));
+            }
+            else
+            {
+                Debug.LogWarning("[UI系统] 该关卡未配置 Scene File，无法加载！");
             }
         }
 
