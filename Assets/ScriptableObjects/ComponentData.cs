@@ -62,6 +62,9 @@ namespace ProjectPowerSystemsEngineer.Data
         [Tooltip("储能建筑断网后，能维持反向供电及稳定度加成的时间 (秒)。")]
         public float dischargeTime = 4f;
 
+        [Tooltip("【新增】储能模式下的稳定度加成 (仅充电并满载时生效，放电模式下稳定度强制为 0)")]
+        public float storageStabilityModifier = 5f;
+
         [Header("Grid Rules")]
         [Tooltip("是否允许其他物体在此地块上穿行或重叠 (普通建筑通常为 false)")]
         public bool isWalkable = false;
