@@ -3,7 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
 using System.Collections;
-using ProjectPowerSystemsEngineer.Systems; // 引入建造系统
+using ProjectPowerSystemsEngineer.Systems;
 
 namespace ProjectPowerSystemsEngineer.UI
 {
@@ -23,7 +23,6 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private void Start()
         {
-            // 初始隐藏暂停菜单
             SetCanvasGroupAlpha(panelPause, 0f, false);
 
             btnResume.onClick.AddListener(ResumeGame);
@@ -33,13 +32,13 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private void Update()
         {
-            // 监听 ESC 或 手柄 B 键
             bool isCancelPressed = false;
 
             if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
                 isCancelPressed = true;
 
-            if (Gamepad.current != null && Gamepad.current.buttonEast.wasPressedThisFrame)
+            // 【核心修改】：将 buttonEast(B键) 修改为 startButton(汉堡菜单键/Options键)
+            if (Gamepad.current != null && Gamepad.current.startButton.wasPressedThisFrame)
                 isCancelPressed = true;
 
             if (isCancelPressed)
@@ -50,18 +49,22 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private void HandleCancelInput()
         {
-            // 1. 如果游戏已经暂停，无条件恢复游戏
+            // 【新增防御机制】：如果游戏正在播放进入关卡的淡入动画，直接拦截，剥夺暂停权限！
+            if (SceneFadeIn.IsFading)
+            {
+                Debug.LogWarning("[PauseMenu] 场景过渡中，已强行拦截玩家的暂停请求！");
+                return;
+            }
+
             if (isPaused)
             {
                 ResumeGame();
                 return;
             }
 
-            // 2. 【核心优先级判断】：检查建造控制器是否正在“忙碌”
             bool isBuilderBusy = false;
             if (builderController != null)
             {
-                // 只要处于建造模式，或者选中了某个设施/空地，都视为“忙碌”
                 isBuilderBusy = builderController.IsBuildingMode ||
                                 builderController.SelectedNode != null ||
                                 builderController.SelectedGridPosition.HasValue;
@@ -69,19 +72,17 @@ namespace ProjectPowerSystemsEngineer.UI
 
             if (isBuilderBusy)
             {
-                // 让步给 BuilderController 去处理取消/退出建造逻辑
                 Debug.Log("[PauseMenu] 拦截指令：当前正在建造或选中物体，将取消权限移交给 BuilderController。");
                 return;
             }
 
-            // 3. 优先级兜底：呼出暂停菜单
             PauseGame();
         }
 
         private void PauseGame()
         {
             isPaused = true;
-            Time.timeScale = 0f; // 冻结物理与时间
+            Time.timeScale = 0f;
             StartCoroutine(FadeMenu(panelPause, 1f, true));
 
             if (OnyxController.Instance != null) OnyxController.Instance.SetState(OnyxState.Watching);
@@ -90,7 +91,7 @@ namespace ProjectPowerSystemsEngineer.UI
         private void ResumeGame()
         {
             isPaused = false;
-            Time.timeScale = 1f; // 恢复时间流速
+            Time.timeScale = 1f;
             StartCoroutine(FadeMenu(panelPause, 0f, false));
 
             if (OnyxController.Instance != null) OnyxController.Instance.SetState(OnyxState.Idle);
@@ -98,7 +99,6 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private void ReturnToDesktop()
         {
-            // 极其重要：跨场景前必须恢复时间，否则新场景的加载和动画会彻底卡死
             Time.timeScale = 1f;
             SceneManager.LoadScene("MainMenuScene");
         }
@@ -112,14 +112,13 @@ namespace ProjectPowerSystemsEngineer.UI
 #endif
         }
 
-        // 独立的淡入淡出协程（使用 unscaledDeltaTime 确保在暂停时也能正常播放UI动画）
         private IEnumerator FadeMenu(CanvasGroup cg, float targetAlpha, bool interactable)
         {
             cg.interactable = interactable;
             cg.blocksRaycasts = interactable;
 
             float startAlpha = cg.alpha;
-            float duration = 0.15f; // 暂停菜单呼出应当非常迅速
+            float duration = 0.15f;
             float time = 0;
 
             while (time < duration)
