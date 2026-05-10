@@ -29,6 +29,10 @@ namespace ProjectPowerSystemsEngineer.Simulation
         public float SharedStability = 10f;
         public bool IsPoweredByGenerator = false;
 
+        // 【新增缓存】用于 UI 统一显示该池子的最终宏观总输出
+        public float CachedOutPower = 0f;
+        public float CachedOutStability = 0f;
+
         /// <summary>
         /// 每帧更新池子状态。如果状态发生重大翻转（充能完毕/耗尽宕机），返回 true 呼叫全网重算。
         /// </summary>
