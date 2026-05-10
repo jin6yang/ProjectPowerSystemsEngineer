@@ -16,20 +16,26 @@ namespace ProjectPowerSystemsEngineer.Components
 
         public float CurrentPowerInput { get; private set; }
         public float CurrentStability { get; private set; }
+
+        // 核心安全标记：一旦为 True，该节点将拒绝输出任何电力
         public bool IsProtectionTripped { get; private set; }
 
-        // ==========================================
-        // 【新增】储能建筑专属状态机
-        // ==========================================
-        public bool IsReceivingExternalPower { get; set; } // 是否正在接收上游传来的电
-        public bool IsCharged { get; private set; } // 是否处于满载生效状态
-        private float chargeTimer = 0f;
-        private float dischargeTimer = 0f;
+        // === 储能池化系统注入的数据 ===
+        public StoragePool MyPool { get; set; }
+        public float SavedChargePercent { get; set; }
+        public bool IsPoweredByGenerator { get; set; }
 
         public List<PowerNode> OutgoingConnections { get; private set; } = new List<PowerNode>();
 
+        // 【新增自愈接口】用于在每次图论重算前，清空错误状态，实现危机解除后的自动恢复
+        public void ResetProtection()
+        {
+            IsProtectionTripped = false;
+        }
+
         private void Start()
         {
+            // 游戏启动时，如果是放置在场景中的地标/目标终端，自动占领网格
             if (GridManager.Instance != null && data != null && !data.isPointToPointCable)
             {
                 Vector2Int pos = GridManager.Instance.WorldToGridPosition(transform.position);
@@ -44,52 +50,12 @@ namespace ProjectPowerSystemsEngineer.Components
             }
         }
 
-        // 【新增】每帧计算储能建筑的时间流逝
-        private void Update()
-        {
-            if (data == null || data.category != ComponentCategory.Storage) return;
-
-            // 如果正在接收外部电力，且没有因为输入过载而爆表
-            if (IsReceivingExternalPower && !IsProtectionTripped)
-            {
-                dischargeTimer = 0f; // 停止放电并重置
-                if (!IsCharged)
-                {
-                    chargeTimer += Time.deltaTime;
-                    if (chargeTimer >= data.chargeTime)
-                    {
-                        IsCharged = true;
-                        Debug.Log($"<color=cyan>[电网调度] {data.componentName} 充能完毕，成功并网提供稳定度！</color>");
-                        PowerSimulationSystem.Instance?.RecalculatePowerGrid(); // 充能完毕，瞬间重算全网
-                    }
-                }
-            }
-            else
-            {
-                // 断电了！开始放电倒计时
-                chargeTimer = 0f;
-                if (IsCharged)
-                {
-                    dischargeTimer += Time.deltaTime;
-                    if (dischargeTimer >= data.dischargeTime)
-                    {
-                        IsCharged = false;
-                        Debug.Log($"<color=red>[电网调度] {data.componentName} 备用电量耗尽，宕机离线！</color>");
-                        PowerSimulationSystem.Instance?.RecalculatePowerGrid(); // 电量耗尽，全网断电
-                    }
-                }
-            }
-        }
-
         public virtual void Initialize(Vector2Int pos)
         {
             GridPosition = pos;
             CurrentPowerInput = 0f;
             CurrentStability = 10f;
             IsProtectionTripped = false;
-            IsCharged = false;
-            chargeTimer = 0f;
-            dischargeTimer = 0f;
             OutgoingConnections.Clear();
         }
 
@@ -112,36 +78,29 @@ namespace ProjectPowerSystemsEngineer.Components
                 lr.SetPosition(0, startPos);
                 lr.SetPosition(1, endPos);
             }
-
-            if (startNode != null && endNode != null &&
-                startNode.data != null && endNode.data != null &&
-                startNode.data.category == ComponentCategory.Generation &&
-                endNode.data.category == ComponentCategory.Generation)
-            {
-                this.TriggerProtection("并网冲突：发电机不可直连！");
-                startNode.TriggerProtection("并网短路！");
-                endNode.TriggerProtection("并网短路！");
-            }
         }
 
         public virtual void ReceivePower(float power, float stability)
         {
+            // 如果是多路汇流，稳定度取“最脏”的那一路（木桶效应）
             if (CurrentPowerInput == 0) CurrentStability = stability;
             else CurrentStability = Mathf.Min(CurrentStability, stability);
 
             CurrentPowerInput = power;
-            CheckOverload();
+            CheckOverload(); // 每次收到电都进行安检
         }
 
         protected virtual void CheckOverload()
         {
             if (data == null) return;
 
+            // 1. 功率爆表检测
             if (CurrentPowerInput > data.maxPowerCapacity && !IsProtectionTripped)
             {
                 TriggerProtection("输入功率超过承载上限！");
             }
 
+            // 2. 电压不稳宕机检测 (仅对有要求的设备生效)
             if (CurrentPowerInput > 0 && data.requiredStability > 0 && CurrentStability < data.requiredStability && !IsProtectionTripped)
             {
                 TriggerProtection($"电网波动过大！要求: {data.requiredStability} / 当前: {CurrentStability:0.0}");
@@ -151,15 +110,14 @@ namespace ProjectPowerSystemsEngineer.Components
         public virtual void TriggerProtection(string customReason = null)
         {
             IsProtectionTripped = true;
-            IsCharged = false; // 触发保护瞬间清空储能
+
+            // 注意：我们绝对不再清空 MyPool！
+            // 这保证了单个电池的烧毁只会让它自己变成死铁，绝不污染或清空整个储能阵列的电量！
+
             if (string.IsNullOrEmpty(customReason))
-            {
                 Debug.LogWarning($"[警报] {data?.componentName} 过载！输入:{CurrentPowerInput}MW。已切断输出！");
-            }
             else
-            {
                 Debug.LogWarning($"[警报] {data?.componentName} 触发保护: {customReason}");
-            }
         }
 
         private void OnGUI()
@@ -195,12 +153,10 @@ namespace ProjectPowerSystemsEngineer.Components
                 style.fontSize = dynamicFontSize;
                 style.fontStyle = FontStyle.Bold;
 
-                Color textColor;
+                // 强制初始化，彻底解决未赋值编译报错
+                Color textColor = Color.white;
                 string statusText = "";
 
-                // ==========================================
-                // 【核心视觉反馈】显示极其炫酷的充放电状态文本
-                // ==========================================
                 if (IsProtectionTripped)
                 {
                     statusText = "[SYS_OVERLOAD]\n";
@@ -208,31 +164,39 @@ namespace ProjectPowerSystemsEngineer.Components
                 }
                 else if (data.category == ComponentCategory.Storage)
                 {
-                    if (IsCharged)
+                    if (MyPool != null)
                     {
-                        if (IsReceivingExternalPower)
+                        if (MyPool.IsReceivingExternalPower)
                         {
-                            statusText = "[储能满载 / 在线]\n";
-                            textColor = new Color(0.2f, 0.8f, 1f); // 赛博青色
+                            if (MyPool.IsCharged)
+                            {
+                                statusText = $"[中转储能 / 满载 {MyPool.Nodes.Count}x]\n";
+                                textColor = new Color(0.2f, 0.8f, 1f);
+                            }
+                            else
+                            {
+                                statusText = $"[中转充能 {Mathf.Clamp01(MyPool.CurrentChargeTimer / MyPool.TotalChargeTime) * 100:0}%]\n";
+                                textColor = new Color(0.2f, 0.8f, 1f);
+                            }
                         }
                         else
                         {
-                            statusText = $"[备用放电中 {data.dischargeTime - dischargeTimer:0.0}s]\n";
-                            textColor = new Color(1f, 0.6f, 0.2f); // 警示橙色
+                            if (MyPool.IsCharged)
+                            {
+                                statusText = $"[备用放电中 {MyPool.TotalDischargeTime - MyPool.CurrentDischargeTimer:0.0}s]\n";
+                                textColor = new Color(1f, 0.6f, 0.2f);
+                            }
+                            else
+                            {
+                                statusText = "[阵列电量耗尽]\n";
+                                textColor = new Color(0.7f, 0.7f, 0.7f);
+                            }
                         }
                     }
                     else
                     {
-                        if (IsReceivingExternalPower)
-                        {
-                            statusText = $"[充能中 {Mathf.Clamp01(chargeTimer / data.chargeTime) * 100:0}%]\n";
-                            textColor = new Color(0.2f, 0.8f, 1f);
-                        }
-                        else
-                        {
-                            statusText = "[电量耗尽 / 脱机]\n";
-                            textColor = new Color(0.7f, 0.7f, 0.7f);
-                        }
+                        statusText = "[系统初始化...]\n";
+                        textColor = new Color(0.7f, 0.7f, 0.7f);
                     }
                 }
                 else if (CurrentPowerInput > 0 || GetPowerOutput() > 0)
@@ -246,10 +210,17 @@ namespace ProjectPowerSystemsEngineer.Components
                     textColor = new Color(0.7f, 0.7f, 0.7f);
                 }
 
-                // 修正放电时 UI 的输入数值显示：放电时虽然输入为 0，但为了美观我们显示它发出的电
+                // 【视觉修复】清晰区分充电透传与备用放电的真实输出功率
                 float displayPower = CurrentPowerInput;
-                if (data.category == ComponentCategory.Generation) displayPower = data.powerGeneration;
-                else if (data.category == ComponentCategory.Storage && IsCharged && !IsReceivingExternalPower) displayPower = data.powerGeneration;
+                if (data.category == ComponentCategory.Generation)
+                    displayPower = data.powerGeneration;
+                else if (data.category == ComponentCategory.Storage && MyPool != null)
+                {
+                    if (MyPool.IsReceivingExternalPower)
+                        displayPower = CurrentPowerInput;
+                    else
+                        displayPower = GetPowerOutput();
+                }
 
                 string displayText = $"{statusText}{data.componentName}\n{displayPower} MW | S:{GetStabilityOutput():0.0}";
 
@@ -266,24 +237,32 @@ namespace ProjectPowerSystemsEngineer.Components
         }
 
         // ==========================================
-        // 【核心修改】充放电逻辑影响真实输出数据
+        // 【核心机制修复】严格区分 储能透传 与 放电产出 模式
         // ==========================================
         public virtual float GetPowerOutput()
         {
+            // 只要触发保护烧毁，无视任何规则，强行输出 0
             if (IsProtectionTripped || data == null) return 0f;
 
             if (data.category == ComponentCategory.Generation)
                 return data.powerGeneration;
 
-            float outPower = Mathf.Max(0f, CurrentPowerInput - data.powerConsumption);
-
-            // 如果是储能设备并且满载，额外输出它产生的功率（比如 60MW）
-            if (data.category == ComponentCategory.Storage && IsCharged)
+            if (data.category == ComponentCategory.Storage && MyPool != null)
             {
-                outPower += data.powerGeneration;
+                if (MyPool.IsReceivingExternalPower)
+                {
+                    // 储能模式：仅仅是一个透传中转站，绝不无中生有叠加自身发电量
+                    return Mathf.Max(0f, CurrentPowerInput - data.powerConsumption);
+                }
+                else
+                {
+                    // 放电模式：只有在池子有电时才作为备用电源输出，否则一滴电都没有
+                    if (MyPool.IsCharged) return data.powerGeneration;
+                    else return 0f;
+                }
             }
 
-            return outPower;
+            return Mathf.Max(0f, CurrentPowerInput - data.powerConsumption);
         }
 
         public virtual float GetStabilityOutput()
@@ -293,12 +272,19 @@ namespace ProjectPowerSystemsEngineer.Components
             if (data.category == ComponentCategory.Generation)
                 return data.stabilityModifier;
 
-            if (data.category == ComponentCategory.Storage && IsCharged)
+            if (data.category == ComponentCategory.Storage && MyPool != null)
             {
-                // 如果断网了在放电，它作为一个独立的发电机，输出它本身的稳定度
-                if (!IsReceivingExternalPower) return data.stabilityModifier;
-                // 如果在网中，则作为一个稳压器加上这部分稳定度
-                return Mathf.Clamp(CurrentStability + data.stabilityModifier, 0f, 10f);
+                if (MyPool.IsReceivingExternalPower)
+                {
+                    // 【机制修复】充电满载模式：它是一个强力稳压器，使用专用的 storageStabilityModifier
+                    if (MyPool.IsCharged) return Mathf.Clamp(CurrentStability + data.storageStabilityModifier, 0f, 10f);
+                    else return CurrentStability;
+                }
+                else
+                {
+                    // 【机制修复】放电模式：它是最原始的备用电源，不提供任何稳定度加成！必须通过外部变电站稳压
+                    return 0f;
+                }
             }
 
             return Mathf.Clamp(CurrentStability + data.stabilityModifier, 0f, 10f);
