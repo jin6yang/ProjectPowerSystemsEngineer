@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using ProjectPowerSystemsEngineer.UI;
+using ProjectPowerSystemsEngineer.Simulation;
 
 namespace ProjectPowerSystemsEngineer.Systems
 {
@@ -13,16 +14,19 @@ namespace ProjectPowerSystemsEngineer.Systems
     {
         public static LevelManager Instance { get; private set; }
 
-        private LevelConfig currentConfig; // 动态获取的当前关卡配置
+        private LevelConfig currentConfig;
         private bool hasFinished = false;
         private float cheatHoldTimer = 0f;
+
+        // === 多目标进度管理 ===
+        private int totalObjectives = 0;
+        private int completedObjectives = 0;
 
         private void Awake()
         {
             if (Instance == null) Instance = this;
             else Destroy(gameObject);
 
-            // 1. 寻找当前场景中的“关卡配置卡带”
             currentConfig = FindAnyObjectByType<LevelConfig>();
 
             if (currentConfig == null)
@@ -31,18 +35,31 @@ namespace ProjectPowerSystemsEngineer.Systems
                 return;
             }
 
-            // 2. 将配置数据注入给 BuilderController
             BuilderController builder = FindAnyObjectByType<BuilderController>();
             if (builder != null)
             {
                 builder.availableComponents = currentConfig.availableComponents;
-                Debug.Log($"[LevelManager] 成功读取 LevelConfig，已注入 {currentConfig.availableComponents.Length} 个可用建筑。");
             }
         }
 
         private void Start()
         {
-            // 给 UI 系统一点点初始化时间，然后推送本关任务
+            // 1. 自动扫描全图，精准统计【必须完成】的目标总数
+            ConsumerObjective[] allObjectives = FindObjectsByType<ConsumerObjective>(FindObjectsSortMode.None);
+            totalObjectives = 0;
+
+            foreach (var obj in allObjectives)
+            {
+                // 【核心修改】只把勾选了 isRequiredForVictory 的算作总进度
+                if (obj.isRequiredForVictory)
+                {
+                    totalObjectives++;
+                }
+            }
+
+            completedObjectives = 0;
+
+            // 2. 推送初始任务目标 UI
             Invoke(nameof(PushObjectiveToUI), 0.5f);
         }
 
@@ -50,25 +67,35 @@ namespace ProjectPowerSystemsEngineer.Systems
         {
             if (hasFinished) return;
 
-            // === 开发者测试逻辑：~ 键控制胜负 ===
+            // 开发者测试逻辑：~ 键控制胜负
             if (Keyboard.current != null)
             {
                 if (Keyboard.current.backquoteKey.isPressed)
                 {
                     cheatHoldTimer += Time.deltaTime;
-                    if (cheatHoldTimer >= 3f)
-                    {
-                        TriggerDefeat();
-                    }
+                    if (cheatHoldTimer >= 3f) TriggerDefeat();
                 }
                 else if (Keyboard.current.backquoteKey.wasReleasedThisFrame)
                 {
-                    if (cheatHoldTimer > 0f && cheatHoldTimer < 1f)
-                    {
-                        TriggerVictory();
-                    }
+                    if (cheatHoldTimer > 0f && cheatHoldTimer < 1f) TriggerVictory();
                     cheatHoldTimer = 0f;
                 }
+            }
+        }
+
+        public void ReportObjectiveCompleted()
+        {
+            if (hasFinished) return;
+
+            completedObjectives++;
+
+            // 每次有目标完成，刷新 UI 进度
+            PushObjectiveToUI();
+
+            // 检查是否所有必做目标都已达成 (并且排除沙盒模式 totalObjectives == 0 的情况)
+            if (totalObjectives > 0 && completedObjectives >= totalObjectives)
+            {
+                TriggerVictory();
             }
         }
 
@@ -79,18 +106,17 @@ namespace ProjectPowerSystemsEngineer.Systems
             MissionObjectivePanel panel = FindAnyObjectByType<MissionObjectivePanel>();
             if (panel != null)
             {
+                // 【已移除强行拼接的进度文本】
+                // 还原为纯净显示原本在 LevelConfig 中配置的文本，方便后续对接专门的进度追踪 UI
                 panel.SetObjective(currentConfig.missionTitle, currentConfig.missionDescription);
             }
         }
 
-        // ==========================================
-        // 公开接口：供本关卡特定的检测脚本调用
-        // ==========================================
         public void TriggerVictory()
         {
             if (hasFinished) return;
             hasFinished = true;
-            Debug.Log("<color=green>[LevelManager] 目标达成！</color>");
+            Debug.Log("<color=green>[LevelManager] 所有主线目标达成！</color>");
 
             MissionObjectivePanel objectivePanel = FindAnyObjectByType<MissionObjectivePanel>();
             if (objectivePanel != null) objectivePanel.SetMissionStatus(true);
