@@ -14,6 +14,9 @@ namespace ProjectPowerSystemsEngineer.Simulation
         [Tooltip("是否必须达成此目标才能通关？\n如果不勾选，该建筑仍可正常运转，但不会计入左下角的通关总进度中。")]
         public bool isRequiredForVictory = true;
 
+        [Tooltip("是否允许玩家移动或拆除此目标建筑？\n【极其重要】默认不勾选，以防止玩家把过关目标给误删了！")]
+        public bool canBeDeletedByPlayer = false;
+
         [Header("Victory Conditions (通关条件)")]
         [Tooltip("需要达到的最小输入功率 (MW)")]
         public float targetPower = 200f;
