@@ -16,6 +16,9 @@ namespace ProjectPowerSystemsEngineer.Core
 
         private void Start()
         {
+            // 【新增】隐藏系统级鼠标指针，完美保持全黑和视频播放时的沉浸感
+            Cursor.visible = false;
+
             videoPlayer = GetComponent<VideoPlayer>();
 
             // 1. 游戏一启动，立刻在后台静默加载主菜单场景

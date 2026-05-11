@@ -52,8 +52,6 @@ namespace ProjectPowerSystemsEngineer.UI
         private bool isPowerMenuOpen = false;
 
         private static MainMenuManager _instance;
-
-        // 【新增】用于管理文字淡入淡出的协程，防止玩家快速滑动鼠标导致动画冲突
         private Coroutine nameFadeCoroutine;
 
         private void Awake()
@@ -69,6 +67,9 @@ namespace ProjectPowerSystemsEngineer.UI
 
         private void Start()
         {
+            // 【新增】进入主菜单或关卡时，确保系统鼠标重新显示出来，以供后续使用
+            Cursor.visible = true;
+
             SetCanvasGroupAlpha(panelSelectUser, 1f, true);
             SetCanvasGroupAlpha(panelMain, 0f, false);
             SetCanvasGroupAlpha(panelLevelSelect, 0f, false);
