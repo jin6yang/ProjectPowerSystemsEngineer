@@ -24,7 +24,6 @@ namespace ProjectPowerSystemsEngineer.Systems
         [Header("Interaction Settings")]
         public float dragThreshold = 10f;
 
-        // 【新增】定义哪些 Layer 会阻挡电线穿透（比如你的高墙 Layer）
         [Tooltip("设置会阻挡电线的物理层级 (例如 Obstacle)")]
         public LayerMask cableObstacleLayer;
 
@@ -147,18 +146,16 @@ namespace ProjectPowerSystemsEngineer.Systems
             }
         }
 
-        // 【新增】核心射线检测逻辑，判断两点之间的半空中是否有物理高墙遮挡
         private bool CheckCablePathClear(Vector3 start, Vector3 end)
         {
             Vector3 direction = end - start;
             float distance = direction.magnitude;
 
-            // 发射一条从起点到终点的射线，只检测 cableObstacleLayer 指定的层级
             if (Physics.Raycast(start, direction.normalized, distance, cableObstacleLayer))
             {
-                return false; // 撞到高墙障碍物，路径被阻挡！
+                return false;
             }
-            return true; // 畅通无阻
+            return true;
         }
 
         private void ProcessLeftClick()
@@ -203,7 +200,6 @@ namespace ProjectPowerSystemsEngineer.Systems
                             }
                             else if (cableStartNode != clickedNode)
                             {
-                                // 【拦截】只有当路径畅通时，才允许建立连接！
                                 if (isCablePathValid)
                                 {
                                     CreateCableConnection(cableStartNode, clickedNode);
@@ -294,10 +290,8 @@ namespace ProjectPowerSystemsEngineer.Systems
                     previewLine.SetPosition(0, startPos);
                     previewLine.SetPosition(1, endPos);
 
-                    // 【视线检测】实时更新预览线的颜色
                     isCablePathValid = CheckCablePathClear(startPos, endPos);
 
-                    // 【新增：最大长度检测】使用切比雪夫距离(包含对角线)
                     if (SelectedComponent.maxCableLength > 0)
                     {
                         int distance = Mathf.Max(Mathf.Abs(startGridPos.x - targetGridPos.x), Mathf.Abs(startGridPos.y - targetGridPos.y));
@@ -440,6 +434,19 @@ namespace ProjectPowerSystemsEngineer.Systems
         private void DeleteSelectedNode()
         {
             if (SelectedNode == null) return;
+
+            // ==========================================
+            // 【新增安全拦截】
+            // 如果玩家选中的是 ConsumerObjective (关卡目标终端)，
+            // 且该目标未开启“允许删除”权限，直接拦截，没收删除指令！
+            // ==========================================
+            ConsumerObjective objective = SelectedNode.GetComponent<ConsumerObjective>();
+            if (objective != null && !objective.canBeDeletedByPlayer)
+            {
+                Debug.LogWarning("<color=yellow>[系统拦截] 无法拆除：该建筑是核心目标，受系统保护！</color>");
+                return; // 直接中止拆除操作！
+            }
+
             List<PowerNode> nodesToDestroy = new List<PowerNode>();
             nodesToDestroy.Add(SelectedNode);
             PowerNode[] allNodesInScene = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
