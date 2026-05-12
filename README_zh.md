@@ -90,7 +90,7 @@ IDE（推荐使用 Visual Studio 2026）
 
 ## 游玩手册
 
-EN: [Player Guide](Player Guide.md)
+EN: [Player Guide](Player_Guide.md)
 
 ZH: [游玩手册](游玩手册.md)
 

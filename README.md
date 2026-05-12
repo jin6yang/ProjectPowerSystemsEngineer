@@ -78,7 +78,7 @@ Special thanks to the following free assets from the Unity Asset Store!
 
 ## Player Guide
 
-EN: [Player Guide](PlayerGuide.md)
+EN: [Player Guide](Player_Guide.md)
 
 ZH: [游玩手册](游玩手册.md)
 
