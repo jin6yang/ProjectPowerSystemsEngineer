@@ -248,6 +248,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4dc56beece4816f4082ba2a0e92cc4ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectPowerSystemsEngineer.Simulation.ConsumerObjective
+  isRequiredForVictory: 1
+  canBeDeletedByPlayer: 0
   targetPower: 150
   targetStability: 2
   maintainDuration: 3
