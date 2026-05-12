@@ -10,7 +10,7 @@ Project : Power Systems Engineer
 ✨This project was developed as part of a university semester assessment. 😊
 </div>
 <div align="center">
-💖It is built with Unity 6 and utilizes the Universal Render Pipeline (URP) for rendering.😎
+💖The game is developed using Unity 6 and utilizes the Universal Render Pipeline (URP). 😎
 </div>
 
 <div align="center">
@@ -19,11 +19,24 @@ Project : Power Systems Engineer
 
 </div>
 
-## Getting Started
 
-> **Note!** This project requires manual building.
 
-### Development Tools & Environment
+## Installation
+
+| Windows | [GitHub Releases](https://github.com/jin6yang/ProjectPowerSystemsEngineer/releases) |
+| ------- | ------------------------------------------------------------ |
+
+> [!TIP]
+>
+> macOS users can use CrossOver.
+>
+> For Linux, it is recommended to install SteamOS directly or use `Proton`.
+
+
+
+## Build
+
+### Development Tools & Environment (Prerequisites)
 
 Unity 6.3
 
@@ -35,28 +48,42 @@ If using Visual Studio Code, you will need the [Unity - Visual Studio Marketplac
 
 If using Rider, it can be used directly, but it is recommended to update to the latest version.
 
-### Build Instructions
+### Instructions
 
 1. Clone the project using the `git` command, or download the ZIP archive directly (select Code → Download ZIP).
 
-   ```text
-   git clone https://github.com/jin6yang/ProjectPowerSystemsEngineer
-   ```
+```shell
+git clone https://github.com/jin6yang/ProjectPowerSystemsEngineer
+```
 
-2. Launch Unity Hub, navigate to the Projects page, select "Add", then select "Add project from disk". Navigate to the directory in the pop-up window and select the `ProjectPowerSystemsEngineer` project folder.
 
-3. Next, if Unity Hub displays a version warning, please select the installed Unity 6.3 (6000.3.13f1) version, choose the corresponding platform (the current platform is recommended), and continue.
 
-4. Wait for Unity to finish loading, and you can then use the engine to build the project.
+## Opening and Main Menu Animations
 
-   To run it directly in the editor, please click the Play button.
+The animations for this project were created using the `Python` library: [Manim Community](https://www.manim.community/)
 
-   If you need to build it, please select File → Build And Run (ensure the Build Profiles are configured correctly).
+Animation project open-source address: [jin6yang/PSE-Animation](https://github.com/jin6yang/PSE-Animation)
 
-### Player Manual
 
-N/A
 
-### License
+## Third-Party Assets
+
+Special thanks to the following free assets from the Unity Asset Store!
+
+[Skybox Series Free | 2D Sky | Unity Asset Store](https://assetstore.unity.com/packages/2d/textures-materials/sky/skybox-series-free-103633)
+
+[Simple Water Shader URP | 2D Water | Unity Asset Store](https://assetstore.unity.com/packages/2d/textures-materials/water/simple-water-shader-urp-191449)
+
+
+
+## Player Guide
+
+EN: [Player Guide](Player Guide.md)
+
+ZH: [游玩手册](游玩手册.md)
+
+
+
+## License
 
 Custom [LICENSE](LICENSE.txt)
