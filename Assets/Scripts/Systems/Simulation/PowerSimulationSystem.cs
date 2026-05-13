@@ -41,6 +41,99 @@ namespace ProjectPowerSystemsEngineer.Simulation
             }
         }
 
+        private void ReceiveRoutedPower(PowerNode target, float totalPower, float incomingStability, Dictionary<PowerNode, float> nodeToNetStorageStability, bool hasPendingInputs)
+        {
+            bool isConsumer = target.data != null && target.data.category == ComponentCategory.Consumer;
+            bool shouldStackStability = isConsumer && target.CurrentPowerInput > 0f;
+            float stabilityToApply = incomingStability;
+
+            if (shouldStackStability)
+            {
+                float storageStabilityAlreadyApplied = GetNetworkStorageStability(target, nodeToNetStorageStability);
+                stabilityToApply = Mathf.Max(0f, incomingStability - storageStabilityAlreadyApplied);
+            }
+
+            target.ReceivePower(totalPower, stabilityToApply, shouldStackStability, isConsumer && hasPendingInputs);
+        }
+
+        private float GetNetworkStorageStability(PowerNode node, Dictionary<PowerNode, float> nodeToNetStorageStability)
+        {
+            return nodeToNetStorageStability.TryGetValue(node, out float netStorageStability)
+                ? Mathf.Clamp(netStorageStability, 0f, 10f)
+                : 0f;
+        }
+
+        private void PrimeGeneratorSource(PowerNode node, Dictionary<PowerNode, float> nodeToNetStorageStability)
+        {
+            if (node.data == null || node.data.category != ComponentCategory.Generation) return;
+
+            node.IsPoweredByGenerator = true;
+            float finalGenStability = Mathf.Clamp(node.data.stabilityModifier + GetNetworkStorageStability(node, nodeToNetStorageStability), 0f, 10f);
+            node.ReceivePower(node.data.powerGeneration, finalGenStability);
+        }
+
+        private bool IsReadyCycleNode(PowerNode node)
+        {
+            if (node == null || node.data == null || node.IsProtectionTripped) return false;
+            return node.CurrentPowerInput > 0f || (node.data.category == ComponentCategory.Generation && node.data.powerGeneration > 0f);
+        }
+
+        private bool IsReadyCyclePool(StoragePool pool)
+        {
+            if (pool == null) return false;
+            return pool.SharedPowerInput > 0f || pool.IsReceivingExternalPower || pool.IsCharged;
+        }
+
+        private List<PowerNode> GetSimulationOutgoing(PowerNode node, Dictionary<PowerNode, List<PowerNode>> physicalGraph)
+        {
+            List<PowerNode> result = new List<PowerNode>();
+            if (node == null || node.data == null) return result;
+            if (node.data.category == ComponentCategory.Consumer) return result;
+            if (!physicalGraph.TryGetValue(node, out List<PowerNode> neighbors)) return result;
+
+            foreach (var neighbor in neighbors)
+            {
+                if (neighbor == null || neighbor.data == null || result.Contains(neighbor)) continue;
+                result.Add(neighbor);
+            }
+
+            return result;
+        }
+
+        private bool ShouldSkipRoutedTarget(PowerNode current, PowerNode target, HashSet<object> processedObjects)
+        {
+            if (target == null || target.data == null) return true;
+            if (current.MyPool != null && target.MyPool != null && current.MyPool == target.MyPool) return true;
+            if (target.data.category == ComponentCategory.Generation) return true;
+            if (target.MyPool != null) return processedObjects.Contains(target.MyPool);
+            if (target.data.category == ComponentCategory.Consumer) return false;
+            return processedObjects.Contains(target);
+        }
+
+        private bool ShouldSkipPoolTarget(StoragePool currentPool, PowerNode target, HashSet<object> processedObjects)
+        {
+            if (target == null || target.data == null) return true;
+            if (target.MyPool == currentPool) return true;
+            if (target.data.category == ComponentCategory.Generation) return true;
+            if (target.MyPool != null) return processedObjects.Contains(target.MyPool);
+            if (target.data.category == ComponentCategory.Consumer) return false;
+            return processedObjects.Contains(target);
+        }
+
+        private void AdvanceTarget(PowerNode target, Dictionary<PowerNode, int> nodeInDegrees, Dictionary<StoragePool, int> poolInDegrees, Queue<object> queue)
+        {
+            if (target.MyPool != null)
+            {
+                poolInDegrees[target.MyPool]--;
+                if (poolInDegrees[target.MyPool] == 0) queue.Enqueue(target.MyPool);
+            }
+            else
+            {
+                nodeInDegrees[target]--;
+                if (nodeInDegrees[target] == 0) queue.Enqueue(target);
+            }
+        }
+
         public void RecalculatePowerGrid()
         {
             PowerNode[] rawNodes = FindObjectsByType<PowerNode>(FindObjectsSortMode.None);
@@ -311,7 +404,7 @@ namespace ProjectPowerSystemsEngineer.Simulation
 
             foreach (var node in allNodes)
             {
-                node.ReceivePower(0f, 10f);
+                node.ReceivePower(0f, 0f);
                 node.IsPoweredByGenerator = false;
                 if (node.MyPool == null) nodeInDegrees[node] = 0;
             }
@@ -327,7 +420,7 @@ namespace ProjectPowerSystemsEngineer.Simulation
 
             foreach (var node in allNodes)
             {
-                foreach (var target in node.OutgoingConnections)
+                foreach (var target in GetSimulationOutgoing(node, undirectedGraph))
                 {
                     if (node.MyPool != null && target.MyPool != null && node.MyPool == target.MyPool)
                         continue;
@@ -335,6 +428,11 @@ namespace ProjectPowerSystemsEngineer.Simulation
                     if (target.MyPool != null) poolInDegrees[target.MyPool]++;
                     else nodeInDegrees[target]++;
                 }
+            }
+
+            foreach (var node in allNodes)
+            {
+                PrimeGeneratorSource(node, nodeToNetStorageStability);
             }
 
             Queue<object> queue = new Queue<object>();
@@ -348,7 +446,7 @@ namespace ProjectPowerSystemsEngineer.Simulation
                         node.IsPoweredByGenerator = true;
 
                         // 【究极修复】：将该物理电网上所有并联储能站的“全网电容补偿”，直接在源头强行注入发电机！
-                        float extraStability = nodeToNetStorageStability.ContainsKey(node) ? nodeToNetStorageStability[node] : 0f;
+                        float extraStability = GetNetworkStorageStability(node, nodeToNetStorageStability);
                         float finalGenStability = Mathf.Clamp(node.data.stabilityModifier + extraStability, 0f, 10f);
 
                         node.ReceivePower(node.data.powerGeneration, finalGenStability);
@@ -361,24 +459,43 @@ namespace ProjectPowerSystemsEngineer.Simulation
                 if (poolInDegrees[pool] == 0) queue.Enqueue(pool);
             }
 
+            HashSet<object> processedObjects = new HashSet<object>();
+
             while (true)
             {
                 while (queue.Count > 0)
                 {
                     object currentObj = queue.Dequeue();
+                    if (processedObjects.Contains(currentObj)) continue;
+                    processedObjects.Add(currentObj);
 
                     if (currentObj is PowerNode current)
                     {
                         float outPower = current.GetPowerOutput();
                         float outStability = current.GetStabilityOutput();
-                        int validPaths = current.OutgoingConnections.Count;
+                        List<PowerNode> outgoingTargets = GetSimulationOutgoing(current, undirectedGraph);
+                        List<PowerNode> routableTargets = new List<PowerNode>();
 
-                        if (validPaths > 0 && outPower > 0)
+                        foreach (var target in outgoingTargets)
                         {
-                            float powerPerPath = outPower / validPaths;
-
-                            foreach (var target in current.OutgoingConnections)
+                            if (!ShouldSkipRoutedTarget(current, target, processedObjects))
                             {
+                                routableTargets.Add(target);
+                            }
+                        }
+
+                        if (routableTargets.Count > 0 && outPower > 0)
+                        {
+                            float powerPerPath = outPower / routableTargets.Count;
+
+                            foreach (var target in outgoingTargets)
+                            {
+                                if (ShouldSkipRoutedTarget(current, target, processedObjects))
+                                {
+                                    AdvanceTarget(target, nodeInDegrees, poolInDegrees, queue);
+                                    continue;
+                                }
+
                                 target.IsPoweredByGenerator |= current.IsPoweredByGenerator;
 
                                 if (target.MyPool != null)
@@ -392,31 +509,20 @@ namespace ProjectPowerSystemsEngineer.Simulation
                                     target.MyPool.SharedStability = Mathf.Min(target.MyPool.SharedStability, outStability);
                                     target.MyPool.IsPoweredByGenerator |= current.IsPoweredByGenerator;
 
-                                    poolInDegrees[target.MyPool]--;
-                                    if (poolInDegrees[target.MyPool] == 0) queue.Enqueue(target.MyPool);
+                                    AdvanceTarget(target, nodeInDegrees, poolInDegrees, queue);
                                 }
                                 else
                                 {
-                                    target.ReceivePower(target.CurrentPowerInput + powerPerPath, outStability);
-                                    nodeInDegrees[target]--;
-                                    if (nodeInDegrees[target] == 0) queue.Enqueue(target);
+                                    ReceiveRoutedPower(target, target.CurrentPowerInput + powerPerPath, outStability, nodeToNetStorageStability, nodeInDegrees[target] > 1);
+                                    AdvanceTarget(target, nodeInDegrees, poolInDegrees, queue);
                                 }
                             }
                         }
                         else
                         {
-                            foreach (var target in current.OutgoingConnections)
+                            foreach (var target in outgoingTargets)
                             {
-                                if (target.MyPool != null)
-                                {
-                                    poolInDegrees[target.MyPool]--;
-                                    if (poolInDegrees[target.MyPool] == 0) queue.Enqueue(target.MyPool);
-                                }
-                                else
-                                {
-                                    nodeInDegrees[target]--;
-                                    if (nodeInDegrees[target] == 0) queue.Enqueue(target);
-                                }
+                                AdvanceTarget(target, nodeInDegrees, poolInDegrees, queue);
                             }
                         }
                     }
@@ -476,7 +582,7 @@ namespace ProjectPowerSystemsEngineer.Simulation
                         foreach (var pNode in pool.Nodes)
                         {
                             if (pNode.IsProtectionTripped) continue;
-                            foreach (var target in pNode.OutgoingConnections)
+                            foreach (var target in GetSimulationOutgoing(pNode, undirectedGraph))
                             {
                                 if (target.MyPool != pool) externalTargets.Add(target);
                             }
@@ -485,18 +591,32 @@ namespace ProjectPowerSystemsEngineer.Simulation
                         foreach (var cNode in pool.InternalCables)
                         {
                             if (cNode.IsProtectionTripped) continue;
-                            foreach (var target in cNode.OutgoingConnections)
+                            foreach (var target in GetSimulationOutgoing(cNode, undirectedGraph))
                             {
                                 if (target.MyPool != pool) externalTargets.Add(target);
                             }
                         }
 
-                        int validPaths = externalTargets.Count;
-                        if (validPaths > 0 && poolOutPower > 0)
+                        List<PowerNode> routableTargets = new List<PowerNode>();
+                        foreach (var target in externalTargets)
                         {
-                            float powerPerPath = poolOutPower / validPaths;
+                            if (!ShouldSkipPoolTarget(pool, target, processedObjects))
+                            {
+                                routableTargets.Add(target);
+                            }
+                        }
+
+                        if (routableTargets.Count > 0 && poolOutPower > 0)
+                        {
+                            float powerPerPath = poolOutPower / routableTargets.Count;
                             foreach (var target in externalTargets)
                             {
+                                if (ShouldSkipPoolTarget(pool, target, processedObjects))
+                                {
+                                    AdvanceTarget(target, nodeInDegrees, poolInDegrees, queue);
+                                    continue;
+                                }
+
                                 target.IsPoweredByGenerator |= pool.IsPoweredByGenerator;
                                 if (target.MyPool != null)
                                 {
@@ -508,14 +628,12 @@ namespace ProjectPowerSystemsEngineer.Simulation
                                     target.MyPool.SharedStability = Mathf.Min(target.MyPool.SharedStability, poolOutStability);
                                     target.MyPool.IsPoweredByGenerator |= pool.IsPoweredByGenerator;
 
-                                    poolInDegrees[target.MyPool]--;
-                                    if (poolInDegrees[target.MyPool] == 0) queue.Enqueue(target.MyPool);
+                                    AdvanceTarget(target, nodeInDegrees, poolInDegrees, queue);
                                 }
                                 else
                                 {
-                                    target.ReceivePower(target.CurrentPowerInput + powerPerPath, poolOutStability);
-                                    nodeInDegrees[target]--;
-                                    if (nodeInDegrees[target] == 0) queue.Enqueue(target);
+                                    ReceiveRoutedPower(target, target.CurrentPowerInput + powerPerPath, poolOutStability, nodeToNetStorageStability, nodeInDegrees[target] > 1);
+                                    AdvanceTarget(target, nodeInDegrees, poolInDegrees, queue);
                                 }
                             }
                         }
@@ -523,16 +641,7 @@ namespace ProjectPowerSystemsEngineer.Simulation
                         {
                             foreach (var target in externalTargets)
                             {
-                                if (target.MyPool != null)
-                                {
-                                    poolInDegrees[target.MyPool]--;
-                                    if (poolInDegrees[target.MyPool] == 0) queue.Enqueue(target.MyPool);
-                                }
-                                else
-                                {
-                                    nodeInDegrees[target]--;
-                                    if (nodeInDegrees[target] == 0) queue.Enqueue(target);
-                                }
+                                AdvanceTarget(target, nodeInDegrees, poolInDegrees, queue);
                             }
                         }
                     }
@@ -541,7 +650,23 @@ namespace ProjectPowerSystemsEngineer.Simulation
                 object cycleObj = null;
                 foreach (var kvp in nodeInDegrees)
                 {
-                    if (kvp.Value > 0) { cycleObj = kvp.Key; break; }
+                    if (kvp.Value > 0 && IsReadyCycleNode(kvp.Key)) { cycleObj = kvp.Key; break; }
+                }
+
+                if (cycleObj == null)
+                {
+                    foreach (var kvp in poolInDegrees)
+                    {
+                        if (kvp.Value > 0 && IsReadyCyclePool(kvp.Key)) { cycleObj = kvp.Key; break; }
+                    }
+                }
+
+                if (cycleObj == null)
+                {
+                    foreach (var kvp in nodeInDegrees)
+                    {
+                        if (kvp.Value > 0) { cycleObj = kvp.Key; break; }
+                    }
                 }
 
                 if (cycleObj == null)

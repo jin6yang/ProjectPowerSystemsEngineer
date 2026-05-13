@@ -54,7 +54,7 @@ namespace ProjectPowerSystemsEngineer.Components
         {
             GridPosition = pos;
             CurrentPowerInput = 0f;
-            CurrentStability = 10f;
+            CurrentStability = 0f;
             IsProtectionTripped = false;
             OutgoingConnections.Clear();
         }
@@ -63,7 +63,7 @@ namespace ProjectPowerSystemsEngineer.Components
         {
             GridPosition = startNode.GridPosition;
             CurrentPowerInput = 0f;
-            CurrentStability = 10f;
+            CurrentStability = 0f;
             IsProtectionTripped = false;
             OutgoingConnections.Clear();
 
@@ -80,17 +80,37 @@ namespace ProjectPowerSystemsEngineer.Components
             }
         }
 
-        public virtual void ReceivePower(float power, float stability)
+        public virtual void ReceivePower(float power, float stability, bool stackStability = false, bool deferStabilityCheck = false)
         {
-            // 如果是多路汇流，稳定度取“最脏”的那一路（木桶效应）
-            if (CurrentPowerInput == 0) CurrentStability = stability;
-            else CurrentStability = Mathf.Min(CurrentStability, stability);
+            if (power <= 0f)
+            {
+                CurrentPowerInput = 0f;
+                CurrentStability = 0f;
+                CheckOverload(deferStabilityCheck);
+                return;
+            }
+
+            stability = Mathf.Clamp(stability, 0f, 10f);
+
+            if (CurrentPowerInput <= 0f)
+            {
+                CurrentStability = stability;
+            }
+            else if (stackStability)
+            {
+                CurrentStability = Mathf.Clamp(CurrentStability + stability, 0f, 10f);
+            }
+            else
+            {
+                // Keep the existing weakest-input rule unless the simulation explicitly requests stacking.
+                CurrentStability = Mathf.Min(CurrentStability, stability);
+            }
 
             CurrentPowerInput = power;
-            CheckOverload(); // 每次收到电都进行安检
+            CheckOverload(deferStabilityCheck); // 每次收到电都进行安检
         }
 
-        protected virtual void CheckOverload()
+        protected virtual void CheckOverload(bool deferStabilityCheck = false)
         {
             if (data == null) return;
 
@@ -101,7 +121,7 @@ namespace ProjectPowerSystemsEngineer.Components
             }
 
             // 2. 电压不稳宕机检测 (仅对有要求的设备生效)
-            if (CurrentPowerInput > 0 && data.requiredStability > 0 && CurrentStability < data.requiredStability && !IsProtectionTripped)
+            if (!deferStabilityCheck && CurrentPowerInput > 0 && data.requiredStability > 0 && CurrentStability < data.requiredStability && !IsProtectionTripped)
             {
                 TriggerProtection($"电网波动过大！要求: {data.requiredStability} / 当前: {CurrentStability:0.0}");
             }
