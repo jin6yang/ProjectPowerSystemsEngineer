@@ -68,7 +68,7 @@ Shader "Hidden/PowerSystem/Toon/ScreenSpaceOutline"
                 depthDelta = max(depthDelta, abs(centerDepth - upDepth));
                 depthDelta /= max(centerDepth, 0.001);
 
-                return smoothstep(_DepthThreshold, _DepthThreshold * 2.0, depthDelta) * _DepthStrength;
+                return smoothstep(_DepthThreshold, _DepthThreshold * 1.5, depthDelta) * _DepthStrength;
             }
 
             half GetNormalEdge(float2 uv, float2 texel)
@@ -85,7 +85,7 @@ Shader "Hidden/PowerSystem/Toon/ScreenSpaceOutline"
                 normalDelta = max(normalDelta, distance(centerNormal, downNormal));
                 normalDelta = max(normalDelta, distance(centerNormal, upNormal));
 
-                return smoothstep(_NormalThreshold, _NormalThreshold * 1.5, normalDelta) * _NormalStrength;
+                return smoothstep(_NormalThreshold, _NormalThreshold * 1.25, normalDelta) * _NormalStrength;
             }
 
             half4 Frag(Varyings input) : SV_Target

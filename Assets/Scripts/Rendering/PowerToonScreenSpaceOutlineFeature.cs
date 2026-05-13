@@ -16,9 +16,9 @@ namespace ProjectProtocol.Rendering
             public Color outlineColor = new Color(0.055f, 0.07f, 0.085f, 1f);
             [Range(0f, 1f)] public float intensity = 0.38f;
             [Range(0.5f, 4f)] public float thickness = 1.15f;
-            [Range(0.0001f, 0.03f)] public float depthThreshold = 0.0035f;
+            [Range(0.0001f, 0.3f)] public float depthThreshold = 0.0035f;
             [Range(0f, 4f)] public float depthStrength = 1.0f;
-            [Range(0.01f, 1f)] public float normalThreshold = 0.22f;
+            [Range(0.01f, 4f)] public float normalThreshold = 0.22f;
             [Range(0f, 4f)] public float normalStrength = 0.75f;
         }
 
